@@ -16,7 +16,9 @@ class TestFluxos(BaseTeste):
         self.assertIn(os_id, [o.id for o in c.os.pendencias(self.mecanico)])                            # RF10
         c.os.classificar(self.atendente, os_id, False, self.mecanico.id)                                 # t1
         c.os.registrar_diagnostico(self.mecanico, os_id, "Amortecedores dianteiros desgastados",
-                                   [(1, 1)], [(1, 2)])                                                    # t2
+                                   [(1, 1)], [(1, 2)])
+        self.assertEqual(self.status(os_id), S.EM_DIAGNOSTICO)  # orçamento em preparação, ainda com o mecânico
+        c.os.enviar_orcamento(self.mecanico, os_id)                                                      # t2
         self.assertEqual(self.status(os_id), S.AGUARDANDO_GERENTE)
         self.assertIn(os_id, [o.id for o in c.os.pendencias(self.gerente)])                             # RF15
         item_peca = c.os.get_itens(os_id)[1][0]
@@ -73,6 +75,7 @@ class TestFluxos(BaseTeste):
         os_id = c.os.abrir_os(self.atendente, 1, 1, "Freio rangendo", 150000)
         c.os.classificar(self.atendente, os_id, False, self.mecanico.id)
         c.os.registrar_diagnostico(self.mecanico, os_id, "Pastilhas gastas", [(3, 1)], [(4, 1)])
+        c.os.enviar_orcamento(self.mecanico, os_id)
         c.orcamento.aprovar(self.gerente, os_id)
         c.orcamento.registrar_decisao_cliente(self.atendente, os_id, False, "Achou caro")
         os_ = c.os.get_os(os_id)

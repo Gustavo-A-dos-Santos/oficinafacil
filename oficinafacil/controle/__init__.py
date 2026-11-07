@@ -74,3 +74,20 @@ def valor_monetario(valor, campo, positivo=False):
     if v < 0 or (positivo and v == 0):
         raise RegraNegocioError(f"O campo {campo} deve ser {'maior que zero' if positivo else 'positivo'}.")
     return round(v, 2)
+
+
+def periodo(data_inicio, data_fim):
+    """Valida o período de uma consulta: datas AAAA-MM-DD (ou vazias) e início não depois do fim."""
+    from datetime import date
+    datas = []
+    for valor, campo in ((data_inicio, "data inicial"), (data_fim, "data final")):
+        valor = (valor or "").strip()
+        if valor:
+            try:
+                date.fromisoformat(valor)
+            except ValueError:
+                raise RegraNegocioError(f"A {campo} é inválida; escolha a data no calendário.")
+        datas.append(valor)
+    if datas[0] and datas[1] and datas[0] > datas[1]:
+        raise RegraNegocioError("A data inicial não pode ser depois da data final.")
+    return datas

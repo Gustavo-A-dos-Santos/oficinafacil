@@ -1,4 +1,4 @@
-"""Testes unitários: cada regra de negócio isolada (CT-U01 a CT-U21 do plano de testes)."""
+"""Testes unitários: cada regra de negócio isolada (CT-U01 a CT-U25 do plano de testes)."""
 import os
 import tempfile
 import unittest
@@ -164,6 +164,56 @@ class TestOrdemServico(BaseTeste):
         sol = self.c.compras.solicitar_compra(self.mecanico, os_id, 1, 2)
         self.c.compras.cancelar_solicitacao(self.gerente, sol.id)
         self.assertEqual(self.c.compras.get_solicitacoes(SituacaoCompra.CANCELADA)[0].id, sol.id)
+
+    def test_CT_U22_orcamento_so_vai_ao_gerente_ao_enviar(self):
+        """RF11, RF14: o diagnóstico fica em preparação; só o envio do mecânico gera o orçamento."""
+        os_id = self.nova_os()
+        self.c.os.classificar(self.atendente, os_id, False, self.mecanico.id)
+        self.c.os.registrar_diagnostico(self.mecanico, os_id, "Amortecedores gastos", [(1, 1)], [])
+        self.assertEqual(self.status(os_id), StatusOS.EM_DIAGNOSTICO)
+        self.assertIsNone(self.c.orcamento.get_atual(os_id))
+        self.assertNotIn(os_id, [o.id for o in self.c.os.pendencias(self.gerente)])
+        self.c.os.adicionar_itens(self.mecanico, os_id, [], [(1, 2)])
+        self.c.os.enviar_orcamento(self.mecanico, os_id)
+        self.assertEqual(self.status(os_id), StatusOS.AGUARDANDO_GERENTE)
+        self.assertEqual(self.c.orcamento.get_atual(os_id).valor_total, 780.0)
+        with self.assertRaises(RegraNegocioError):  # depois do envio, só o gerente muda os itens
+            self.c.os.adicionar_itens(self.mecanico, os_id, [(2, 1)], [])
+
+    def test_CT_U23_remover_item_e_envio_sem_servico(self):
+        """RF11, RF14: item retirado antes do envio; orçamento sem serviço não é enviado."""
+        os_id = self.nova_os()
+        self.c.os.classificar(self.atendente, os_id, False, self.mecanico.id)
+        with self.assertRaises(RegraNegocioError):  # sem diagnóstico não há o que enviar
+            self.c.os.enviar_orcamento(self.mecanico, os_id)
+        self.c.os.registrar_diagnostico(self.mecanico, os_id, "Amortecedores gastos", [(1, 1)], [(1, 2)])
+        item = self.c.os.get_itens(os_id)[0][0]
+        self.c.os.remover_item(self.mecanico, os_id, "servico", item.id)
+        with self.assertRaises(RegraNegocioError):
+            self.c.os.enviar_orcamento(self.mecanico, os_id)
+        self.assertEqual(self.status(os_id), StatusOS.EM_DIAGNOSTICO)
+
+    def test_CT_U24_pesquisar_pecas_e_servicos(self):
+        """RF05, RF06: pesquisa por parte da descrição, sem diferenciar maiúsculas e acentos, ou pelo código."""
+        pecas = self.c.cadastro.get_pecas("OLEO")
+        self.assertTrue(pecas and all("óleo" in p.descricao.lower() for p in pecas))
+        self.assertEqual([p.id for p in self.c.cadastro.get_pecas("1")][:1], [1])
+        self.assertEqual([s.descricao for s in self.c.cadastro.get_servicos(busca="revisao")], ["Revisão de freios"])
+        self.assertEqual(self.c.cadastro.get_servicos(busca="não existe"), [])
+
+    def test_CT_U25_periodo_do_relatorio(self):
+        """RF34: datas inválidas ou período invertido são recusados; o PDF sai com o período."""
+        with self.assertRaises(RegraNegocioError):
+            self.c.relatorio.gerar(self.gerente, "2026-13-01", "")
+        with self.assertRaises(RegraNegocioError):
+            self.c.relatorio.gerar(self.gerente, "2026-11-30", "2026-11-01")
+        r = self.c.relatorio.gerar(self.gerente, "2026-11-01", "2026-11-30")
+        caminho = os.path.join(tempfile.mkdtemp(), "rel.pdf")
+        self.c.relatorio.exportar_pdf(self.gerente, r, caminho)
+        with open(caminho, "rb") as f:
+            conteudo = f.read()
+        self.assertTrue(conteudo.startswith(b"%PDF-1.4"))
+        self.assertIn(b"01/11/2026 a 30/11/2026", conteudo)
 
 
 if __name__ == "__main__":

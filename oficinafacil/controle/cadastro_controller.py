@@ -82,8 +82,8 @@ class CadastroController:
         self.seguranca.exigir_perfil(usuario, Perfil.GERENTE)
         self.estoque_dao.alternar_ativo_servico(id)
 
-    def get_servicos(self, so_ativos=False):
-        return self.estoque_dao.get_servicos(so_ativos)
+    def get_servicos(self, so_ativos=False, busca=""):
+        return self.estoque_dao.get_servicos(so_ativos, busca.strip())
 
     # ---------------------------------------------------------------- RF06 peças
     @transacao
@@ -96,8 +96,8 @@ class CadastroController:
         self.estoque_dao.editar_peca(p)
         return p
 
-    def get_pecas(self):
-        return self.estoque_dao.get_pecas()
+    def get_pecas(self, busca=""):
+        return self.estoque_dao.get_pecas(busca.strip())
 
     # ---------------------------------------------------------------- RF07 fornecedores
     @transacao

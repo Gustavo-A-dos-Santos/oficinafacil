@@ -24,7 +24,8 @@ class OrcamentoController:
 
     @transacao
     def gerar_orcamento(self, usuario, os_id):
-        """RF14 (inclui RF15): versão 1 pendente de aprovação; a OS passa a Aguardando gerente (painel do gerente)."""
+        """RF14 (inclui RF15): chamado quando o mecânico envia o orçamento (OSController.enviar_orcamento).
+        Versão 1 pendente de aprovação; a OS passa a Aguardando gerente (painel do gerente)."""
         orcamento = self.servico_orcamento.nova_versao(os_id)
         mudar_status(self.os_dao, self.os_dao.get_os(os_id), StatusOS.AGUARDANDO_GERENTE, usuario)
         return orcamento
@@ -77,9 +78,8 @@ class OrcamentoController:
         if not orcamento or orcamento.situacao not in (SituacaoOrcamento.APROVADO_GERENTE,
                                                        SituacaoOrcamento.APROVADO_CLIENTE):
             raise RegraNegocioError("O orçamento só pode ser exportado depois de aprovado pelo gerente (RN02).")
-        linhas = self.servico_relatorio.linhas_orcamento(self._os(os_id), orcamento, self.os_dao.get_itens_servico(os_id),
-                                                         self.os_dao.get_itens_peca(os_id))
-        self.servico_relatorio.escrever_pdf(caminho, linhas)
+        self.servico_relatorio.pdf_orcamento(caminho, self._os(os_id), orcamento, self.os_dao.get_itens_servico(os_id),
+                                             self.os_dao.get_itens_peca(os_id), self.os_dao.get_diagnostico(os_id))
 
     def get_atual(self, os_id):
         return self.orcamento_dao.get_atual(os_id)

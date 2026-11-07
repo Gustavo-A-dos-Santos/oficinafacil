@@ -3,6 +3,8 @@ import os
 import sqlite3
 from datetime import date
 
+from . import sem_acento
+
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS usuario (
     id INTEGER PRIMARY KEY,
@@ -130,6 +132,7 @@ class Conexao:
         conn = sqlite3.connect(self.caminho)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.create_function("sem_acento", 1, sem_acento, deterministic=True)  # usada nas pesquisas
         conn.executescript(ESQUEMA)
         if conn.execute("SELECT COUNT(*) FROM usuario").fetchone()[0] == 0:
             self.carregar_dados_iniciais(conn)

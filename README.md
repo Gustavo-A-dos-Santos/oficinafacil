@@ -41,5 +41,5 @@ com SQL parametrizado e devolvem objetos do modelo.
 | `oficinafacil/servico/` | Serviços | `ServicoSeguranca`, `ServicoOrcamento`, `ServicoEstoque`, `ServicoNotificacao`, `ServicoRelatorio` (PDF) |
 | `oficinafacil/persistencia/` | Persistência | `Conexao` (14 tabelas, dados iniciais, backup) e os 6 DAOs |
 | `oficinafacil/modelo/` | Modelo | Classes de domínio: `cadastro`, `catalogo`, `atendimento` e as enumerações |
-| `tests/` | Testes | `apoio.py` (pré-condições), unitários, integração e não funcionais (unittest, 30 testes) |
+| `tests/` | Testes | `apoio.py` (pré-condições), unitários, integração e não funcionais (unittest, 34 testes) |
 | `docs/` | Documentação | Itens 8 a 10 do TCD e capturas de tela |

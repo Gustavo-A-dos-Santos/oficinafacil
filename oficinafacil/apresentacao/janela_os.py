@@ -1,12 +1,13 @@
 """Janela da OS: detalhes e as ações permitidas para o perfil e o status atuais."""
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
 from ..controle.pagamento_controller import PagamentoController
-from ..modelo import moeda
+from ..modelo import data_br, moeda
 from ..modelo.atendimento import StatusOS
 from ..modelo.cadastro import Perfil
-from .componentes import TITULO, DialogoItens, criar_tabela, executar, id_da_opcao, opcao, pedir, preencher, selecionado
+from .componentes import (TITULO, DialogoItens, criar_tabela, executar, id_da_opcao, opcao, pedir, preencher,
+                          salvar_e_abrir_pdf, selecionado)
 
 S = StatusOS
 DESTINACOES = ["Devolvido ao cliente", "Reciclagem (sucata metálica)", "Coleta de óleo usado (rerrefino)",
@@ -51,19 +52,22 @@ class JanelaOS(tk.Toplevel):
     def atualizar(self):
         self.os = o = self.ctrl.os.get_os(self.os_id)
         servicos, pecas = self.ctrl.os.get_itens(self.os_id)
-        diag = self.ctrl.os.get_diagnostico(self.os_id)
-        texto = (f"Status: {o.nome_status()}        Aberta em {o.data_abertura} por {o.aberta_por}\n"
+        self.diag = diag = self.ctrl.os.get_diagnostico(self.os_id)
+        texto = (f"Status: {o.nome_status()}        Aberta em {data_br(o.data_abertura, True)} por {o.aberta_por}\n"
                  f"Cliente: {o.cliente_nome} ({o.cliente_telefone})        Veículo: {o.marca} {o.modelo} - "
                  f"placa {o.placa} - km {o.km_entrada}\n"
                  f"Problema relatado: {o.problema}\n"
                  f"Mecânico responsável: {o.mecanico_nome or '-'}        Diagnóstico: {diag.descricao if diag else '-'}\n"
                  f"Total da OS: {moeda(self.ctrl.os.calcular_total(self.os_id))}        "
                  f"Pago: {moeda(self.ctrl.pagamento.get_total_pago(self.os_id))}")
-        for rotulo, valor in (("Execução registrada em", o.data_execucao), ("Concluída em", o.data_conclusao),
-                              ("Cliente avisado em", o.data_aviso_cliente),
+        for rotulo, valor in (("Execução registrada em", data_br(o.data_execucao, True)),
+                              ("Concluída em", data_br(o.data_conclusao, True)),
+                              ("Cliente avisado em", data_br(o.data_aviso_cliente, True)),
                               ("Motivo do cancelamento", o.motivo_cancelamento)):
             if valor:
                 texto += f"\n{rotulo}: {valor}"
+        if o.status == S.EM_DIAGNOSTICO and diag:
+            texto += "\nOrçamento em preparação: revise os itens e use Enviar orçamento ao gerente."
         self.cabecalho.config(text=texto)
         formato = {"valor": moeda, "valor_total": moeda}
         preencher(self.t_serv, servicos, formato)
@@ -84,8 +88,12 @@ class JanelaOS(tk.Toplevel):
         if s == S.ABERTA and p in (Perfil.ATENDENTE, Perfil.MECANICO):
             self._botao("Classificar atendimento", self.classificar)
         if p == Perfil.MECANICO:
-            if s == S.EM_DIAGNOSTICO:
+            if s == S.EM_DIAGNOSTICO and not self.diag:
                 self._botao("Registrar diagnóstico", self.diagnosticar)
+            if s == S.EM_DIAGNOSTICO and self.diag:  # orçamento em preparação: revisar e enviar
+                self._botao("Adicionar itens", self.adicionar_itens)
+                self._botao("Remover item", self.remover_item)
+                self._botao("Enviar orçamento ao gerente", self.enviar_orcamento)
             if s == S.EM_EXECUCAO:
                 if not self.os.data_execucao:
                     self._botao("Registrar execução", self.registrar_execucao)
@@ -135,7 +143,27 @@ class JanelaOS(tk.Toplevel):
     def diagnosticar(self):
         r = DialogoItens(self, self.ctrl.cadastro, "Registrar diagnóstico", True).mostrar()
         if r and self._executar(self.ctrl.os.registrar_diagnostico, self.usuario, self.os_id, *r):
-            self._feito("Diagnóstico registrado. O orçamento foi gerado e enviado ao gerente.")
+            self._feito("Diagnóstico registrado. Revise os itens e, quando estiver pronto, clique em "
+                        "Enviar orçamento ao gerente.")
+
+    def adicionar_itens(self):
+        r = DialogoItens(self, self.ctrl.cadastro, "Adicionar itens ao orçamento", False).mostrar()
+        if r and self._executar(self.ctrl.os.adicionar_itens, self.usuario, self.os_id, r[1], r[2]):
+            self._feito()
+
+    def remover_item(self):
+        tipo, tree = ("servico", self.t_serv) if self.t_serv.selection() else ("peca", self.t_peca)
+        item = selecionado(tree, "Selecione o serviço ou a peça na aba Serviços e peças.")
+        if item and messagebox.askyesno(TITULO, "Remover o item selecionado do orçamento?", parent=self) and \
+                self._executar(self.ctrl.os.remover_item, self.usuario, self.os_id, tipo, item):
+            self._feito()
+
+    def enviar_orcamento(self):
+        total = moeda(self.ctrl.os.calcular_total(self.os_id))
+        if messagebox.askyesno(TITULO, f"Enviar o orçamento de {total} ao gerente?\n\nDepois do envio, os itens só "
+                                       "mudam pelo gerente.", parent=self) and \
+                self._executar(self.ctrl.os.enviar_orcamento, self.usuario, self.os_id):
+            self._feito("Orçamento enviado. O gerente foi avisado no painel.")
 
     def registrar_execucao(self):
         tem_orcamento = self.ctrl.orcamento.get_atual(self.os_id) is not None
@@ -178,10 +206,8 @@ class JanelaOS(tk.Toplevel):
             self._feito("Orçamento aprovado e disponível ao atendente.")
 
     def exportar(self):
-        caminho = filedialog.asksaveasfilename(parent=self, defaultextension=".pdf", filetypes=[("PDF", "*.pdf")],
-                                               initialfile=f"orcamento_OS{self.os_id}.pdf")
-        if caminho and self._executar(self.ctrl.orcamento.exportar_pdf, self.os_id, caminho):
-            messagebox.showinfo(TITULO, f"Orçamento salvo em:\n{caminho}", parent=self)
+        salvar_e_abrir_pdf(self, f"orcamento_OS{self.os_id}.pdf",
+                           lambda caminho: self.ctrl.orcamento.exportar_pdf(self.os_id, caminho))
 
     def decisao(self):
         r = pedir(self, "Decisão do cliente", [("d", "O cliente", ["Aprovou o orçamento", "Rejeitou o orçamento"]),

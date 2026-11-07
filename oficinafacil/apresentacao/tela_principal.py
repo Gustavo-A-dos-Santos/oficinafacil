@@ -1,18 +1,18 @@
 """Tela principal: cabeçalho com o usuário e as abas permitidas ao perfil."""
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import messagebox, ttk
 
-from ..modelo import moeda
+from ..modelo import data_br, moeda
 from ..modelo.atendimento import StatusOS
 from ..modelo.cadastro import Perfil
-from .componentes import (TITULO, Dialogo, Formulario, criar_tabela, executar, id_da_opcao, opcao, pedir, preencher,
-                          selecionado, sim_nao)
+from .componentes import (TITULO, Dialogo, Formulario, SeletorPeriodo, criar_tabela, executar, id_da_opcao, opcao,
+                          pedir, preencher, salvar_e_abrir_pdf, selecionado, sim_nao)
 from .janela_os import JanelaOS
 
 COLUNAS_OS = [("id", "OS", 45), ("status", "Status", 165), ("data_abertura", "Abertura", 160),
               ("cliente_nome", "Cliente", 150), ("placa", "Placa", 90), ("modelo", "Modelo", 90),
               ("mecanico_nome", "Mecânico", 120), ("problema", "Problema", 250)]
-FORMATO_OS = {"status": lambda s: StatusOS.NOMES.get(s, s)}
+FORMATO_OS = {"status": lambda s: StatusOS.NOMES.get(s, s), "data_abertura": lambda d: data_br(d, True)}
 
 
 class TelaPrincipal(ttk.Frame):
@@ -32,6 +32,8 @@ class TelaPrincipal(ttk.Frame):
         self._aba(AbaOS, "Ordens de serviço")
         if p in (Perfil.ATENDENTE, Perfil.GERENTE):
             self._aba(AbaClientes, "Clientes e veículos")
+        if p in (Perfil.ATENDENTE, Perfil.MECANICO):
+            self._aba(AbaConsultaCatalogo, "Peças e serviços")
         if p == Perfil.GERENTE:
             self._aba(AbaCompras, "Compras")
             self._aba(AbaCatalogo, "Catálogo")
@@ -109,12 +111,15 @@ class AbaOS(Aba):
         self.status = ttk.Combobox(filtros, state="readonly", width=18, values=["Todos"] + list(StatusOS.NOMES.values()))
         self.status.set("Todos")
         self.cliente, self.placa = ttk.Entry(filtros, width=16), ttk.Entry(filtros, width=10)
-        self.de, self.ate = ttk.Entry(filtros, width=11), ttk.Entry(filtros, width=11)
-        for rotulo, w in [("Status", self.status), ("Cliente", self.cliente), ("Placa", self.placa),
-                          ("De (AAAA-MM-DD)", self.de), ("Até", self.ate)]:
+        for rotulo, w in [("Status", self.status), ("Cliente", self.cliente), ("Placa", self.placa)]:
             ttk.Label(filtros, text=rotulo + ":").pack(side="left", padx=(8, 2))
             w.pack(side="left")
-        ttk.Button(filtros, text="Buscar", command=self.atualizar).pack(side="left", padx=8)
+        self.status.bind("<<ComboboxSelected>>", lambda e: self.atualizar())
+        for w in (self.cliente, self.placa):
+            w.bind("<Return>", lambda e: self.atualizar())
+        self.periodo = SeletorPeriodo(filtros, self.atualizar)
+        self.periodo.pack(side="left", padx=(10, 0))
+        ttk.Button(filtros, text="Buscar", command=self.atualizar).pack(side="left", padx=4)
         self.tree = criar_tabela(self, COLUNAS_OS, 16)
         self.tree.quadro.pack(fill="both", expand=True, pady=8)
         self.tree.bind("<Double-1>", lambda e: self._abrir())
@@ -127,9 +132,10 @@ class AbaOS(Aba):
 
     def atualizar(self):
         codigo = next((k for k, v in StatusOS.NOMES.items() if v == self.status.get()), None)
-        lista = self.ctrl.os.get_lista(self.usuario, codigo, self.cliente.get().strip(), self.placa.get().strip(),
-                                       self.de.get().strip(), self.ate.get().strip())
-        preencher(self.tree, lista, FORMATO_OS)
+        lista = executar(self.ctrl.os.get_lista, self.usuario, codigo, self.cliente.get().strip(),
+                         self.placa.get().strip(), *self.periodo.get())
+        if lista is not None:
+            preencher(self.tree, lista if lista is not True else [], FORMATO_OS)
 
     def _abrir(self):
         os_id = selecionado(self.tree)
@@ -306,10 +312,19 @@ class AbaClientes(Aba):
 class CadastroSimples(ttk.LabelFrame):
     """Lista mais formulário, usada no catálogo e nos usuários."""
 
-    def __init__(self, pai, titulo, colunas, campos, listar, salvar, alternar=None, formatos=None):
+    def __init__(self, pai, titulo, colunas, campos, listar, salvar, alternar=None, formatos=None, pesquisa=False):
+        """pesquisa=True mostra um campo de pesquisa; listar então recebe o texto pesquisado."""
         super().__init__(pai, text=titulo, padding=6)
         self.listar, self.salvar, self.alternar, self.formatos = listar, salvar, alternar, formatos or {}
         self.id = None
+        self.busca = None
+        if pesquisa:
+            f = ttk.Frame(self)
+            f.pack(fill="x", pady=(0, 4))
+            ttk.Label(f, text="Pesquisar (descrição ou código):").pack(side="left")
+            self.busca = ttk.Entry(f, width=18)
+            self.busca.pack(side="left", padx=4, fill="x", expand=True)
+            self.busca.bind("<KeyRelease>", lambda e: self.atualizar())
         self.tree = criar_tabela(self, colunas, 8)
         self.tree.quadro.pack(fill="both", expand=True)
         self.tree.bind("<<TreeviewSelect>>", self._selecionar)
@@ -324,7 +339,7 @@ class CadastroSimples(ttk.LabelFrame):
         self.atualizar()
 
     def atualizar(self):
-        self.objetos = {o.id: o for o in self.listar()}
+        self.objetos = {o.id: o for o in (self.listar(self.busca.get()) if self.busca else self.listar())}
         preencher(self.tree, self.objetos.values(), self.formatos)
 
     def _selecionar(self, _evento):
@@ -357,16 +372,17 @@ class AbaCatalogo(Aba):
         self.partes = [
             CadastroSimples(self, "Serviços", [("id", "Cód.", 40), ("descricao", "Descrição", 170),
                                                ("valor_base", "Valor base", 90), ("ativo", "Ativo", 45)],
-                            [("descricao", "Descrição"), ("valor_base", "Valor base")], lambda: cad.get_servicos(),
+                            [("descricao", "Descrição"), ("valor_base", "Valor base")],
+                            lambda busca: cad.get_servicos(busca=busca),
                             lambda d, id: cad.salvar_servico(u, d["descricao"], d["valor_base"], id),
-                            lambda id: cad.alternar_ativo_servico(u, id), formato),
+                            lambda id: cad.alternar_ativo_servico(u, id), formato, pesquisa=True),
             CadastroSimples(self, "Peças e estoque", [("id", "Cód.", 40), ("descricao", "Descrição", 150),
                                                       ("valor", "Valor", 80), ("qtd_estoque", "Estoque", 60),
                                                       ("estoque_minimo", "Mínimo", 55)],
                             [("descricao", "Descrição"), ("valor", "Valor"), ("qtd_estoque", "Qtd. em estoque"),
                              ("estoque_minimo", "Estoque mínimo")], cad.get_pecas,
                             lambda d, id: cad.salvar_peca(u, d["descricao"], d["valor"], d["qtd_estoque"],
-                                                          d["estoque_minimo"], id), formatos=formato),
+                                                          d["estoque_minimo"], id), formatos=formato, pesquisa=True),
             CadastroSimples(self, "Fornecedores", [("id", "Cód.", 40), ("nome", "Nome", 150), ("telefone", "Telefone", 110)],
                             [("nome", "Nome"), ("telefone", "Telefone"), ("email", "E-mail")], cad.get_fornecedores,
                             lambda d, id: cad.salvar_fornecedor(u, d["nome"], d["telefone"], d["email"], id)),
@@ -377,6 +393,49 @@ class AbaCatalogo(Aba):
     def atualizar(self):
         for parte in self.partes:
             parte.atualizar()
+
+
+class AbaConsultaCatalogo(Aba):
+    """Pesquisa de serviços e peças para o atendente e o mecânico (preço e estoque), só para consulta."""
+
+    def __init__(self, pai, principal):
+        super().__init__(pai, principal)
+        f = ttk.Frame(self)
+        f.pack(fill="x")
+        ttk.Label(f, text="Pesquisar serviço ou peça (descrição ou código):").pack(side="left")
+        self.busca = ttk.Entry(f, width=30)
+        self.busca.pack(side="left", padx=6)
+        self.busca.bind("<KeyRelease>", lambda e: self.atualizar())
+        ttk.Button(f, text="Limpar", command=lambda: (self.busca.delete(0, "end"), self.atualizar())).pack(side="left")
+        self.resumo = ttk.Label(f, foreground="gray")
+        self.resumo.pack(side="right")
+        corpo = ttk.Frame(self)
+        corpo.pack(fill="both", expand=True, pady=8)
+        esq = ttk.LabelFrame(corpo, text="Serviços", padding=6)
+        dir_ = ttk.LabelFrame(corpo, text="Peças e estoque", padding=6)
+        esq.pack(side="left", fill="both", expand=True, padx=(0, 4))
+        dir_.pack(side="left", fill="both", expand=True, padx=(4, 0))
+        self.ts = criar_tabela(esq, [("id", "Cód.", 45), ("descricao", "Descrição", 230), ("valor_base", "Valor", 90)], 16)
+        self.ts.quadro.pack(fill="both", expand=True)
+        self.tp = criar_tabela(dir_, [("id", "Cód.", 45), ("descricao", "Descrição", 200), ("valor", "Valor", 80),
+                                      ("qtd_estoque", "Estoque", 60), ("situacao", "Situação", 120)], 16)
+        self.tp.quadro.pack(fill="both", expand=True)
+        self.tp.tag_configure("baixo", foreground="#a33")
+        self.atualizar()
+
+    def atualizar(self):
+        busca = self.busca.get()
+        servicos = self.ctrl.cadastro.get_servicos(True, busca)
+        pecas = self.ctrl.cadastro.get_pecas(busca)
+        preencher(self.ts, servicos, {"valor_base": moeda})
+        for p in pecas:
+            p.situacao = ("Sem estoque" if p.qtd_estoque <= 0 else
+                          "Abaixo do mínimo" if p.qtd_estoque < p.estoque_minimo else "Disponível")
+        preencher(self.tp, pecas, {"valor": moeda})
+        for p in pecas:
+            if p.situacao != "Disponível":
+                self.tp.item(str(p.id), tags=("baixo",))
+        self.resumo.config(text=f"{len(servicos)} serviço(s) e {len(pecas)} peça(s) encontrados")
 
 
 class AbaUsuarios(Aba):
@@ -448,20 +507,20 @@ class AbaRelatorios(Aba):
         super().__init__(pai, principal)
         f = ttk.Frame(self)
         f.pack(fill="x")
-        ttk.Label(f, text="Período de (AAAA-MM-DD):").pack(side="left")
-        self.de, self.ate = ttk.Entry(f, width=11), ttk.Entry(f, width=11)
-        self.de.pack(side="left", padx=4)
-        ttk.Label(f, text="até:").pack(side="left")
-        self.ate.pack(side="left", padx=4)
+        ttk.Label(f, text="Período (data de abertura das OS) ").pack(side="left")
+        self.periodo = SeletorPeriodo(f, self.atualizar)
+        self.periodo.pack(side="left")
         ttk.Button(f, text="Gerar relatório", command=self.atualizar).pack(side="left", padx=8)
         ttk.Button(f, text="Exportar PDF", command=self.exportar).pack(side="left")
+        ttk.Label(self, text="Clique em ▼ para escolher a data no calendário, ou use a lista Período... para os "
+                             "atalhos (este mês, mês anterior...).", foreground="gray").pack(anchor="w", pady=(4, 0))
         self.texto = tk.Text(self, width=90, height=24, font=("Consolas", 11))
         self.texto.pack(fill="both", expand=True, pady=8)
         self.relatorio = None
         self.atualizar()
 
     def atualizar(self):
-        r = executar(self.ctrl.relatorio.gerar, self.usuario, self.de.get().strip(), self.ate.get().strip())
+        r = executar(self.ctrl.relatorio.gerar, self.usuario, *self.periodo.get())
         if r:
             self.relatorio = r
             self.texto.delete("1.0", "end")
@@ -470,7 +529,7 @@ class AbaRelatorios(Aba):
     def exportar(self):
         if not self.relatorio:
             return
-        caminho = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF", "*.pdf")],
-                                               initialfile="relatorio_gerencial.pdf")
-        if caminho and executar(self.ctrl.relatorio.exportar_pdf, self.usuario, self.relatorio, caminho):
-            messagebox.showinfo(TITULO, f"Relatório salvo em:\n{caminho}")
+        de, ate = self.relatorio["data_inicio"], self.relatorio["data_fim"]
+        nome = "relatorio_gerencial" + (f"_{de}" if de else "") + (f"_a_{ate}" if ate else "") + ".pdf"
+        salvar_e_abrir_pdf(self, nome, lambda caminho: self.ctrl.relatorio.exportar_pdf(self.usuario, self.relatorio,
+                                                                                         caminho))

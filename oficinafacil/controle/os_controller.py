@@ -1,4 +1,5 @@
-"""OSController: abertura (RF08, RF10), classificação (RF09), diagnóstico (RF11), status (RF12), consulta (RF13),
+"""OSController: abertura (RF08, RF10), classificação (RF09), diagnóstico e envio do orçamento (RF11, RF14),
+status (RF12), consulta (RF13),
 autorização (RF19), execução (RF26), conclusão (RF27, RF28) e aviso ao cliente (RF29)."""
 from ..modelo import RegraNegocioError
 from ..modelo.atendimento import Diagnostico, ItemPecaOS, ItemServicoOS, OrdemServico, StatusOS
@@ -12,7 +13,7 @@ from ..servico.estoque import ServicoEstoque
 from ..servico.notificacao import ServicoNotificacao
 from ..servico.orcamento import ServicoOrcamento
 from ..servico.seguranca import ServicoSeguranca
-from . import exigir_status, inteiro, mudar_status, obrigatorio, transacao
+from . import exigir_status, inteiro, mudar_status, obrigatorio, periodo, transacao
 from .orcamento_controller import OrcamentoController
 from .pecas_compras_controller import PecasComprasController
 
@@ -58,16 +59,51 @@ class OSController:
         mudar_status(self.os_dao, os_, StatusOS.EM_EXECUCAO if simples else StatusOS.EM_DIAGNOSTICO, usuario)
 
     @transacao
-    def registrar_diagnostico(self, usuario, os_id, descricao, servicos, pecas):
-        """RF11 (inclui RF14 e RF12). servicos e pecas: listas de (id, quantidade)."""
-        self.seguranca.exigir_perfil(usuario, Perfil.MECANICO)
-        exigir_status(self.get_os(os_id), StatusOS.EM_DIAGNOSTICO)
-        if not servicos:
-            raise RegraNegocioError("Informe ao menos um serviço necessário.")
+    def registrar_diagnostico(self, usuario, os_id, descricao, servicos=(), pecas=()):
+        """RF11: grava o diagnóstico e os itens necessários. servicos e pecas: listas de (id, quantidade).
+        O orçamento fica em preparação com o mecânico até ele usar enviar_orcamento."""
+        self._exigir_preparacao(usuario, os_id)
+        if self.os_dao.get_diagnostico(os_id):
+            raise RegraNegocioError("O diagnóstico desta OS já foi registrado; use Adicionar itens para completar.")
         self.os_dao.salvar_diagnostico(Diagnostico(os_id=os_id, mecanico_id=usuario.id,
                                                    descricao=obrigatorio(descricao, "diagnóstico"), data=agora()))
         self._inserir_itens(os_id, servicos, pecas)
-        OrcamentoController(self.conn).gerar_orcamento(usuario, os_id)
+
+    @transacao
+    def adicionar_itens(self, usuario, os_id, servicos=(), pecas=()):
+        """RF11: completa o orçamento em preparação, antes do envio."""
+        self._exigir_preparacao(usuario, os_id, com_diagnostico=True)
+        if not servicos and not pecas:
+            raise RegraNegocioError("Adicione ao menos um serviço ou uma peça.")
+        self._inserir_itens(os_id, servicos, pecas)
+
+    @transacao
+    def remover_item(self, usuario, os_id, tipo, item_id):
+        """RF11: retira um serviço ou uma peça do orçamento em preparação."""
+        self._exigir_preparacao(usuario, os_id, com_diagnostico=True)
+        if tipo not in ("servico", "peca"):
+            raise RegraNegocioError("Tipo de item inválido.")
+        if self.os_dao.excluir_item(tipo, item_id, os_id) == 0:
+            raise RegraNegocioError("Item não encontrado nesta OS.")
+
+    @transacao
+    def enviar_orcamento(self, usuario, os_id):
+        """RF14 (inclui RF15 e RF12): o mecânico envia o orçamento revisado ao gerente."""
+        self._exigir_preparacao(usuario, os_id, com_diagnostico=True)
+        if not self.os_dao.get_itens_servico(os_id):
+            raise RegraNegocioError("Informe ao menos um serviço necessário antes de enviar o orçamento.")
+        return OrcamentoController(self.conn).gerar_orcamento(usuario, os_id)
+
+    def _exigir_preparacao(self, usuario, os_id, com_diagnostico=False):
+        """Diagnóstico e orçamento em preparação: só o mecânico responsável, com a OS em diagnóstico."""
+        self.seguranca.exigir_perfil(usuario, Perfil.MECANICO)
+        os_ = self.get_os(os_id)
+        exigir_status(os_, StatusOS.EM_DIAGNOSTICO)
+        if os_.mecanico_id != usuario.id:
+            raise RegraNegocioError("Só o mecânico responsável pode diagnosticar esta OS.")
+        if com_diagnostico and not self.os_dao.get_diagnostico(os_id):
+            raise RegraNegocioError("Registre o diagnóstico primeiro.")
+        return os_
 
     @transacao
     def autorizar_execucao(self, usuario, os_id):
@@ -137,6 +173,7 @@ class OSController:
 
     def get_lista(self, usuario, status=None, cliente="", placa="", data_inicio="", data_fim=""):
         """RF13: o mecânico vê as OS sob sua responsabilidade e as ainda sem responsável."""
+        data_inicio, data_fim = periodo(data_inicio, data_fim)
         lista = self.os_dao.get_lista(status, cliente, placa, data_inicio, data_fim)
         if usuario.perfil == Perfil.MECANICO:
             lista = [o for o in lista if o.mecanico_id in (None, usuario.id)]

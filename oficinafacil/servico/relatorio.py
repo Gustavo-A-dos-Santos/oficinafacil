@@ -1,6 +1,7 @@
 """ServicoRelatorio: relatório gerencial (RF34) e exportação em PDF do orçamento (RF17) e do relatório."""
-from ..modelo import moeda
+from ..modelo import data_br, moeda
 from ..modelo.atendimento import StatusOS
+from .pdf import DocumentoPDF
 
 
 class ServicoRelatorio:
@@ -30,14 +31,15 @@ class ServicoRelatorio:
                                 f"WHERE 1=1{filtro}", args).fetchone()[0]
         horas = c.execute("SELECT AVG((julianday(o.data_conclusao) - julianday(o.data_abertura)) * 24) "
                           f"FROM ordem_servico o WHERE o.data_conclusao IS NOT NULL{filtro}", args).fetchone()[0]
-        return {"por_status": [(StatusOS.NOMES[s], n) for s, n in por_status],
+        return {"data_inicio": data_inicio, "data_fim": data_fim, "por_status": [(StatusOS.NOMES[s], n) for s, n in por_status],
                 "servicos": [tuple(l) for l in servicos], "pecas": [tuple(l) for l in pecas],
                 "faturamento": round(faturamento, 2),
                 "tempo_medio_horas": round(horas, 1) if horas is not None else None}
 
     def linhas_relatorio(self, r):
         """Texto do relatório, usado na tela e no PDF."""
-        linhas = ["RELATÓRIO GERENCIAL", "", "OS por status:"]
+        de, ate = data_br(r.get("data_inicio")) or "início", data_br(r.get("data_fim")) or "hoje"
+        linhas = ["RELATÓRIO GERENCIAL", f"Período: {de} a {ate}", "", "OS por status:"]
         linhas += [f"   {nome:<22}{n:>5}" for nome, n in r["por_status"]] or ["   (nenhuma)"]
         tm = r["tempo_medio_horas"]
         linhas += ["", f"Faturamento (pagamentos recebidos): {moeda(r['faturamento'])}",
@@ -48,47 +50,51 @@ class ServicoRelatorio:
         linhas += [f"   {d:<35}{q:>5}" for d, q in r["pecas"]] or ["   (nenhuma)"]
         return linhas
 
-    def linhas_orcamento(self, os_, orcamento, itens_servico, itens_peca):
-        linhas = ["OficinaFácil - Orçamento", "",
-                  f"OS nº {os_.id}    Versão do orçamento: {orcamento.versao}    Data: {orcamento.data}",
-                  f"Cliente: {os_.cliente_nome}    Telefone: {os_.cliente_telefone}",
-                  f"Veículo: {os_.marca} {os_.modelo}    Placa: {os_.placa}    Km: {os_.km_entrada}",
-                  f"Problema relatado: {os_.problema}", "", "Serviços:"]
-        for i in itens_servico:
-            linhas.append(f"   {i.quantidade} x {i.descricao}  ({moeda(i.valor)})  = {moeda(i.subtotal())}")
-        linhas.append("Peças:")
-        for i in itens_peca:
-            linhas.append(f"   {i.quantidade} x {i.descricao}  ({moeda(i.valor)})  = {moeda(i.subtotal())}")
-        linhas += ["", f"TOTAL: {moeda(orcamento.valor_total)}", "",
-                   "Assinatura do cliente: ______________________________________"]
-        return linhas
+    def pdf_orcamento(self, caminho, os_, orcamento, itens_servico, itens_peca, diagnostico=None):
+        """RF17: orçamento para o cliente, com os dados da OS, os itens, os totais e as assinaturas."""
+        doc = DocumentoPDF("Orçamento", f"OS nº {os_.id}  ·  versão {orcamento.versao}")
+        doc.secao("Dados do atendimento")
+        doc.campos([("Cliente", os_.cliente_nome), ("Telefone", os_.cliente_telefone),
+                    ("Veículo", f"{os_.marca} {os_.modelo}"), ("Placa e quilometragem", f"{os_.placa}  ·  {os_.km_entrada or 0:,} km".replace(",", ".")),
+                    ("Data do orçamento", data_br(orcamento.data, True)), ("Mecânico responsável", os_.mecanico_nome)])
+        doc.secao("Problema relatado")
+        doc.paragrafo(os_.problema)
+        if diagnostico:
+            doc.secao("Diagnóstico")
+            doc.paragrafo(diagnostico.descricao)
+        colunas = [("Descrição", 6, "esquerda"), ("Qtd.", 1, "direita"), ("Valor unitário", 2, "direita"),
+                   ("Subtotal", 2, "direita")]
+        total_servicos = sum(i.subtotal() for i in itens_servico)
+        total_pecas = sum(i.subtotal() for i in itens_peca)
+        doc.secao("Serviços")
+        doc.tabela(colunas, [(i.descricao, i.quantidade, moeda(i.valor), moeda(i.subtotal())) for i in itens_servico],
+                   "Nenhum serviço.")
+        doc.secao("Peças")
+        doc.tabela(colunas, [(i.descricao, i.quantidade, moeda(i.valor), moeda(i.subtotal())) for i in itens_peca],
+                   "Nenhuma peça.")
+        doc.totais([("Serviços", moeda(total_servicos)), ("Peças", moeda(total_pecas))],
+                   ("TOTAL", moeda(orcamento.valor_total)))
+        doc.paragrafo("Os valores consideram as peças e os serviços listados acima. Qualquer item a mais será "
+                      "informado em um novo orçamento, para nova aprovação.", 8.5, (0.45, 0.45, 0.45))
+        doc.assinaturas(["Assinatura do cliente", "OficinaFácil"])
+        doc.salvar(caminho)
 
-    def escrever_pdf(self, caminho, linhas):
-        """PDF A4 só com texto (Helvetica 11, até 60 linhas por página), sem bibliotecas externas."""
-        paginas = [linhas[i:i + 60] for i in range(0, max(len(linhas), 1), 60)] or [[]]
-        kids = " ".join(f"{4 + 2 * i} 0 R" for i in range(len(paginas)))
-        objetos = [b"<< /Type /Catalog /Pages 2 0 R >>",
-                   f"<< /Type /Pages /Kids [{kids}] /Count {len(paginas)} >>".encode(),
-                   b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"]
-        for i, pagina in enumerate(paginas):
-            fluxo = ["BT", "/F1 11 Tf", "14 TL", "50 800 Td"]
-            for linha in pagina:
-                texto = linha.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-                fluxo.append(f"({texto}) Tj T*")
-            fluxo.append("ET")
-            dados = "\n".join(fluxo).encode("cp1252", errors="replace")
-            objetos.append(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-                           f"/Resources << /Font << /F1 3 0 R >> >> /Contents {5 + 2 * i} 0 R >>".encode())
-            objetos.append(f"<< /Length {len(dados)} >>\nstream\n".encode() + dados + b"\nendstream")
-        saida = bytearray(b"%PDF-1.4\n")
-        posicoes = []
-        for n, obj in enumerate(objetos, start=1):
-            posicoes.append(len(saida))
-            saida += f"{n} 0 obj\n".encode() + obj + b"\nendobj\n"
-        inicio_xref = len(saida)
-        saida += f"xref\n0 {len(objetos) + 1}\n0000000000 65535 f \n".encode()
-        for p in posicoes:
-            saida += f"{p:010d} 00000 n \n".encode()
-        saida += f"trailer\n<< /Size {len(objetos) + 1} /Root 1 0 R >>\nstartxref\n{inicio_xref}\n%%EOF\n".encode()
-        with open(caminho, "wb") as f:
-            f.write(saida)
+    def pdf_relatorio(self, caminho, r):
+        """RF34: relatório gerencial do período, com indicadores e gráficos de barras."""
+        de, ate = data_br(r.get("data_inicio")), data_br(r.get("data_fim"))
+        periodo = (f"{de} a {ate}" if de and ate else f"a partir de {de}" if de else f"até {ate}" if ate
+                   else "todo o período")
+        doc = DocumentoPDF("Relatório gerencial", f"Período: {periodo}")
+        tm = r["tempo_medio_horas"]
+        doc.cartoes([("OS abertas no período", str(sum(n for _, n in r["por_status"]))),
+                     ("Faturamento recebido", moeda(r["faturamento"])),
+                     ("Tempo médio de atendimento", "-" if tm is None else f"{tm} h")])
+        doc.secao("Ordens de serviço por status")
+        doc.barras(r["por_status"], "Nenhuma OS no período.")
+        doc.secao("Serviços mais realizados (OS encerradas)")
+        doc.tabela([("Serviço", 8, "esquerda"), ("Quantidade", 2, "direita")], r["servicos"], "Nenhum serviço.")
+        doc.secao("Peças mais utilizadas (OS encerradas)")
+        doc.tabela([("Peça", 8, "esquerda"), ("Quantidade", 2, "direita")], r["pecas"], "Nenhuma peça.")
+        doc.paragrafo("Faturamento: soma dos pagamentos das OS abertas no período. Tempo médio: da abertura até a "
+                      "conclusão do serviço.", 8.5, (0.45, 0.45, 0.45))
+        doc.salvar(caminho)

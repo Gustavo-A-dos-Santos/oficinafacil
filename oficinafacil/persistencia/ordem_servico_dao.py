@@ -117,6 +117,11 @@ class OrdemServicoDAO:
         return self.conn.execute(f"UPDATE {tabela} SET valor = ? WHERE id = ? AND os_id = ?",
                                  (valor, item_id, os_id)).rowcount
 
+    def excluir_item(self, tabela, item_id, os_id):
+        """Retira um item da OS; devolve quantas linhas saíram (0 se o item não é da OS)."""
+        tabela = {"servico": "item_servico_os", "peca": "item_peca_os"}[tabela]
+        return self.conn.execute(f"DELETE FROM {tabela} WHERE id = ? AND os_id = ?", (item_id, os_id)).rowcount
+
     def editar_destinacao(self, item_peca_id, destino):
         return self.conn.execute("UPDATE item_peca_os SET destinacao_residuo = ? WHERE id = ?",
                                  (destino, item_peca_id)).rowcount

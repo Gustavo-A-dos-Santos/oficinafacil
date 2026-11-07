@@ -31,4 +31,5 @@ class BaseTeste(unittest.TestCase):
         os_id = self.nova_os()
         self.c.os.classificar(self.atendente, os_id, False, self.mecanico.id)
         self.c.os.registrar_diagnostico(self.mecanico, os_id, "Amortecedores gastos", list(servicos), list(pecas))
+        self.c.os.enviar_orcamento(self.mecanico, os_id)
         return os_id

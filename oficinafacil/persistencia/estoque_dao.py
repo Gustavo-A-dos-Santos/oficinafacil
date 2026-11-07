@@ -1,6 +1,7 @@
 """EstoqueDAO: CRUD do catálogo (servico, peca), dos fornecedores e das solicitações de compra."""
 from ..modelo.atendimento import SolicitacaoCompra
 from ..modelo.catalogo import Fornecedor, Peca, Servico
+from . import sem_acento
 
 
 class EstoqueDAO:
@@ -24,9 +25,16 @@ class EstoqueDAO:
         rs = self.conn.execute("SELECT * FROM servico WHERE id = ?", (id,)).fetchone()
         return Servico(rs["id"], rs["descricao"], rs["valor_base"], bool(rs["ativo"])) if rs else None
 
-    def get_servicos(self, so_ativos=False):
-        sql = "SELECT * FROM servico" + (" WHERE ativo = 1" if so_ativos else "") + " ORDER BY descricao"
-        return [Servico(rs["id"], rs["descricao"], rs["valor_base"], bool(rs["ativo"])) for rs in self.conn.execute(sql)]
+    def get_servicos(self, so_ativos=False, busca=""):
+        """busca: parte da descrição (sem diferenciar maiúsculas nem acentos) ou o código."""
+        sql, args = "SELECT * FROM servico WHERE 1=1", []
+        if so_ativos:
+            sql += " AND ativo = 1"
+        if busca:
+            sql += " AND (sem_acento(descricao) LIKE ? OR CAST(id AS TEXT) = ?)"
+            args += [f"%{sem_acento(busca)}%", busca]
+        return [Servico(rs["id"], rs["descricao"], rs["valor_base"], bool(rs["ativo"]))
+                for rs in self.conn.execute(sql + " ORDER BY descricao", args)]
 
     # ---------------------------------------------------------------- peça e estoque
     def salvar_peca(self, p):
@@ -46,8 +54,13 @@ class EstoqueDAO:
         rs = self.conn.execute("SELECT * FROM peca WHERE id = ?", (id,)).fetchone()
         return self._montar_peca(rs) if rs else None
 
-    def get_pecas(self):
-        return [self._montar_peca(rs) for rs in self.conn.execute("SELECT * FROM peca ORDER BY descricao")]
+    def get_pecas(self, busca=""):
+        """busca: parte da descrição (sem diferenciar maiúsculas nem acentos) ou o código."""
+        sql, args = "SELECT * FROM peca", []
+        if busca:
+            sql += " WHERE sem_acento(descricao) LIKE ? OR CAST(id AS TEXT) = ?"
+            args = [f"%{sem_acento(busca)}%", busca]
+        return [self._montar_peca(rs) for rs in self.conn.execute(sql + " ORDER BY descricao", args)]
 
     def _montar_peca(self, rs):
         return Peca(rs["id"], rs["descricao"], rs["valor"], rs["qtd_estoque"], rs["estoque_minimo"])

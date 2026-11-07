@@ -5,6 +5,7 @@ from ..persistencia.ordem_servico_dao import OrdemServicoDAO
 from ..servico.orcamento import ServicoOrcamento
 from ..servico.relatorio import ServicoRelatorio
 from ..servico.seguranca import ServicoSeguranca
+from . import periodo
 
 
 class RelatorioController:
@@ -28,7 +29,7 @@ class RelatorioController:
     def gerar(self, usuario, data_inicio="", data_fim=""):
         """RF34: relatório gerencial do período."""
         self.seguranca.exigir_perfil(usuario, Perfil.GERENTE)
-        return self.servico_relatorio.gerar(data_inicio, data_fim)
+        return self.servico_relatorio.gerar(*periodo(data_inicio, data_fim))
 
     def linhas(self, relatorio):
         return self.servico_relatorio.linhas_relatorio(relatorio)
@@ -36,7 +37,7 @@ class RelatorioController:
     def exportar_pdf(self, usuario, relatorio, caminho):
         """RF34 (A2): exporta o relatório em PDF."""
         self.seguranca.exigir_perfil(usuario, Perfil.GERENTE)
-        self.servico_relatorio.escrever_pdf(caminho, self.linhas(relatorio))
+        self.servico_relatorio.pdf_relatorio(caminho, relatorio)
 
     def painel(self):
         """RF35: quantidade de OS em andamento por etapa."""
