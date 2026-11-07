@@ -209,7 +209,7 @@ As figuras a seguir mostram as principais telas do sistema, capturadas com uma b
 
 ### b. Entregas no Github dos códigos.
 
-O código é versionado com Git e publicado no GitHub (RNF08), no repositório [inserir o endereço do repositório no GitHub]. O Quadro 10 mostra a organização do repositório e o Quadro 11, as entregas, com um commit por marco do cronograma e uma etiqueta (tag) por parte do TCD.
+O código é versionado com Git e publicado no GitHub (RNF08), no repositório público https://github.com/Gustavo-A-dos-Santos/oficinafacil, na ramificação (branch) main. O Quadro 10 mostra a organização do repositório e o Quadro 11, as entregas.
 
 
 **Quadro 10 - Organização do repositório.**
@@ -226,14 +226,12 @@ O código é versionado com Git e publicado no GitHub (RNF08), no repositório [
 
 **Quadro 11 - Entregas no GitHub.**
 
-| Entrega | Conteúdo | Marcos |
+| Entrega | Conteúdo | Itens |
 |---|---|---|
-| Commits 1 a 6 | Um commit por marco de desenvolvimento, com o código e os testes do marco. | M1 a M6 |
-| Commit 7 | Testes não funcionais, backup, manuais e capturas de tela. | M7 |
-| Tag v1.0-parte2 | Sistema completo da Segunda Parte (itens 8 e 9). | M1 a M7 |
-| Tag v1.1-parte3 | Versão validada pelos testes da Terceira Parte (item 10). | Item 10 |
+| Commit 829394b (07/11/2026) | Sistema completo: código-fonte, testes automatizados, README, documentação e capturas de tela. | 8, 9 e 10 |
+| Commits seguintes | Correções e ajustes apontados pelos testes e pela avaliação, um commit por alteração. | 10 |
 
-Para publicar, na pasta sistema: git init; git add .; git commit -m "OficinaFácil"; git branch -M main; git remote add origin com o endereço do repositório; e git push -u origin main.
+Para enviar uma alteração, na pasta sistema: git add .; git commit -m "descrição da alteração"; e git push. Para obter o código: git clone https://github.com/Gustavo-A-dos-Santos/oficinafacil.git.
 
 ---
 
