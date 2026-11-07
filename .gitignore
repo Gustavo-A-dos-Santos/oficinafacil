@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+oficinafacil.db
+backups/
+.venv/
