@@ -258,6 +258,7 @@ O código é versionado com Git e publicado no GitHub (RNF08), no repositório p
 | Commit bc9af7e (07/11/2026) | Sistema completo: código-fonte, testes automatizados, README, documentação e capturas de tela. | 8, 9 e 10 |
 | Commit 978c2c7 (07/11/2026) | Documentação: endereço do repositório no item 9b. | 9 |
 | Commit 5770c85 (07/11/2026) | Envio do orçamento pelo mecânico, pesquisa de peças e serviços, campos de data com calendário, novo layout do PDF e testes CT-U22 a CT-U25. | 9 e 10 |
+| Commit aa4e6be (10/11/2026) | Servidor central e estações na rede local, interface em PySide6 com temas claro e escuro, compras sem OS com filtros e testes CT-U26 a CT-U30, CT-I05 a CT-I08 e CT-N06 a CT-N09. | 8, 9 e 10 |
 
 Para enviar uma alteração, na pasta sistema: git add .; git commit -m "descrição da alteração"; e git push. Para obter o código: git clone https://github.com/Gustavo-A-dos-Santos/oficinafacil.git.
 
