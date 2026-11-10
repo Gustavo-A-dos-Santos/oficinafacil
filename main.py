@@ -1,16 +1,13 @@
-"""Ponto de entrada do OficinaFácil: python main.py"""
-import os
-import sys
+"""Estação de trabalho do OficinaFácil: python main.py [--servidor 192.168.0.10:8765]
+
+Abre a interface gráfica; os dados ficam no servidor central (servidor.py), na rede local da oficina.
+O endereço do servidor é informado na tela de login (ou aqui) e fica salvo para as próximas vezes.
+"""
+import argparse
 
 from oficinafacil.apresentacao.app import App
-from oficinafacil.persistencia.conexao import Conexao
 
 if __name__ == "__main__":
-    pasta = os.path.dirname(os.path.abspath(sys.argv[0]))
-    conexao = Conexao(os.path.join(pasta, "oficinafacil.db"))
-    conn = conexao.conectar()
-    conexao.backup_diario(conn, os.path.join(pasta, "backups"))  # RNF05
-    try:
-        App(conn).executar()
-    finally:
-        conn.close()
+    args = argparse.ArgumentParser(description="Estação de trabalho do OficinaFácil")
+    args.add_argument("--servidor", default="", help="endereço do servidor central, ex.: 192.168.0.10:8765")
+    App(servidor=args.parse_args().servidor).executar()

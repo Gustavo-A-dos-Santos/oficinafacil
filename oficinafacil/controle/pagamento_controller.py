@@ -1,6 +1,6 @@
 """PagamentoController: pagamento (RF30), bloqueio da entrega sem pagamento (RF31) e entrega (RF32)."""
 from ..modelo import RegraNegocioError, moeda
-from ..modelo.atendimento import Pagamento, StatusOS
+from ..modelo.atendimento import FORMAS_PAGAMENTO, Pagamento, StatusOS
 from ..modelo.cadastro import Perfil
 from ..persistencia import agora
 from ..persistencia.ordem_servico_dao import OrdemServicoDAO
@@ -12,7 +12,7 @@ from . import exigir_status, mudar_status, transacao, valor_monetario
 
 class PagamentoController:
 
-    FORMAS = ["Dinheiro", "PIX", "Cartão de débito", "Cartão de crédito"]
+    FORMAS = FORMAS_PAGAMENTO
 
     def __init__(self, conn):
         self.conn = conn

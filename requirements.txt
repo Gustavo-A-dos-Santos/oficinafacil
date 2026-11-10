@@ -1,0 +1,2 @@
+# Interface gráfica (Qt for Python, licença LGPL v3). O restante do sistema usa só a biblioteca padrão.
+PySide6-Essentials==6.11.3

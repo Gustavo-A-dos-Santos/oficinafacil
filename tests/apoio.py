@@ -1,7 +1,7 @@
 """Pré-condições comuns dos testes: banco novo em memória, com os dados iniciais, e os sete controladores."""
 import unittest
 
-from oficinafacil.apresentacao.app import Controladores
+from oficinafacil.controle.controladores import Controladores
 from oficinafacil.persistencia.conexao import Conexao
 
 

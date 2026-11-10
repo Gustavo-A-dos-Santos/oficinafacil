@@ -6,7 +6,7 @@ Gerado a partir do mesmo conteúdo do documento de entrega (`definitiva/TCD_ESOF
 
 ## 8. Apresente os materiais para o desenvolvimento do TCD
 
-Esta parte apresenta o sistema OficinaFácil implementado a partir da modelagem dos itens 1 a 7. Para manter o sistema simples de instalar e de usar numa oficina pequena, ele foi construído como aplicação desktop, com a linguagem Python e somente com a sua biblioteca padrão (PYTHON SOFTWARE FOUNDATION, 2025). O código implementa os 35 requisitos funcionais (RF01 a RF35) e as dez regras de negócio (RN01 a RN10), com as 14 tabelas do modelo de dados (Quadro 29*).
+Esta parte apresenta o sistema OficinaFácil implementado a partir da modelagem dos itens 1 a 7. Para manter o sistema simples de instalar e de usar numa oficina pequena, ele foi construído como um sistema cliente-servidor para a rede local: um computador da oficina é o servidor central, que guarda o banco e aplica as regras de negócio, e os demais são estações de trabalho, com a interface gráfica. Tudo é feito com a linguagem Python e a sua biblioteca padrão (PYTHON SOFTWARE FOUNDATION, 2025), mais uma única biblioteca externa, a PySide6 (Qt), usada só nas estações (THE QT COMPANY, 2025). O código implementa os 35 requisitos funcionais (RF01 a RF35) e as dez regras de negócio (RN01 a RN10), com as 14 tabelas do modelo de dados (Quadro 29*).
 
 ### a. Linguagens de programação.
 
@@ -18,15 +18,18 @@ Esta parte apresenta o sistema OficinaFácil implementado a partir da modelagem 
 | Python 3 (desenvolvido e testado na versão 3.14.4; funciona a partir da 3.10) | Todo o sistema: interface gráfica, regras de negócio, persistência e testes automatizados. |
 | SQL (dialeto do SQLite) | Criação das 14 tabelas, com chaves primárias e estrangeiras, e consultas parametrizadas. |
 
-Nenhum pacote externo é necessário. O Quadro 2 mostra os módulos da biblioteca padrão usados e a função de cada um.
+O Quadro 2 mostra as bibliotecas usadas e a função de cada uma. Só a PySide6 precisa ser instalada, e só nas estações; o servidor usa apenas o que já vem com o Python.
 
 
-**Quadro 2 - Módulos da biblioteca padrão do Python usados no sistema.**
+**Quadro 2 - Bibliotecas usadas no sistema.**
 
-| Módulo | Função no sistema |
+| Biblioteca | Função no sistema |
 |---|---|
-| tkinter / ttk | Interface gráfica: janelas, abas, tabelas e formulários (RNF01, RNF13). |
-| sqlite3 | Banco de dados relacional embutido no arquivo oficinafacil.db, com transações e backup (RNF05, RNF06). |
+| PySide6 6.11 (Qt for Python, licença LGPL v3) | Interface gráfica: janelas, menu lateral, tabelas, formulários, tema claro e escuro e ícones (RNF01, RNF13). Junto com ela vão a fonte Inter (licença OFL) e os ícones Lucide (licença ISC). |
+| sqlite3 | Banco de dados relacional embutido no arquivo oficinafacil.db, no servidor, com transações e backup (RNF05, RNF06). |
+| http.server e threading | Servidor central: recebe as chamadas das estações e atende cada uma numa linha de execução própria (RNF15). |
+| urllib e json | Estações: enviam cada chamada ao servidor e recebem a resposta em JSON. |
+| secrets e ipaddress | Chave de sessão de cada login e recusa de endereços fora da rede local (RNF03, RNF15). |
 | hashlib e hmac | Hash das senhas com PBKDF2-SHA256 e sal aleatório (RNF03). |
 | datetime | Data e hora do histórico de status, dos orçamentos e dos pagamentos (RNF09). |
 | functools | Decorador que executa cada operação como transação e a desfaz em caso de erro (RNF06). |
@@ -39,9 +42,9 @@ O código é orientado a objetos e segue as camadas do diagrama de componentes (
 
 | Camada | Pacote | Conteúdo |
 |---|---|---|
-| Apresentação | oficinafacil/apresentacao | App, TelaLogin, TelaPrincipal (com as abas), JanelaOS e componentes comuns (tabela, formulário e diálogos), em tkinter. |
+| Apresentação | oficinafacil/apresentacao | App, TelaLogin, TelaPrincipal (menu lateral e páginas), JanelaOS, o design system (tema.py) e os componentes, em PySide6. |
 | Controle | oficinafacil/controle | AuthController, CadastroController, OSController, OrcamentoController, PecasComprasController, PagamentoController e RelatorioController, com a transação de cada operação (RNF06) e a mudança de status (RF12). |
-| Serviços | oficinafacil/servico | ServicoSeguranca (hash e perfis), ServicoOrcamento (totais e versões), ServicoEstoque (disponibilidade e baixa), ServicoNotificacao (pendências e mensagem ao cliente) e ServicoRelatorio (relatório e PDF). |
+| Serviços | oficinafacil/servico | ServicoSeguranca (hash e perfis), ServicoOrcamento (totais e versões), ServicoEstoque (disponibilidade e baixa), ServicoNotificacao (pendências e mensagem ao cliente) e ServicoRelatorio (relatório), que monta os PDF com o módulo pdf.py (DocumentoPDF). |
 | Persistência | oficinafacil/persistencia | Conexao (14 tabelas, dados iniciais e backup) e os DAOs UsuarioDAO, ClienteVeiculoDAO, OrdemServicoDAO, OrcamentoDAO, EstoqueDAO e PagamentoDAO. |
 | Modelo | oficinafacil/modelo | Classes de domínio em três módulos: cadastro, catalogo e atendimento, com as enumerações StatusOS, Perfil, SituacaoOrcamento e SituacaoCompra. |
 | Inicialização | main.py | Abre o banco, faz o backup do dia e mostra a tela de login. |
@@ -63,14 +66,14 @@ O código é orientado a objetos e segue as camadas do diagrama de componentes (
 
 ### c. Manual de Instalação do sistema desenvolvido.
 
-**Requisitos:** computador com Windows 10 ou 11, Linux ou macOS e Python 3.10 ou mais novo. Não é preciso servidor, banco de dados separado nem internet (RNF07, RNF11).
+**Requisitos:** os computadores da oficina ligados numa rede local (cabo ou Wi-Fi), com endereços privados, por exemplo 192.168.0.x. Em todos, Windows 10 ou 11, Linux ou macOS e Python 3.10 ou mais novo. Um deles é o servidor central e fica ligado durante o expediente; a internet só é usada uma vez em cada estação, para instalar a biblioteca da interface (RNF07, RNF11, RNF15).
 
-1. **Instalar o Python.** Baixar o instalador em https://www.python.org/downloads/ e executá-lo. No Windows, marcar a opção “Add python.exe to PATH” antes de clicar em “Install Now”. No Linux, se o tkinter não vier junto, instalar o pacote python3-tk.
-2. **Conferir a instalação.** Abrir o Prompt de Comando e digitar python --version. Deve aparecer “Python 3.x.x”.
-3. **Obter o sistema.** Baixar o repositório do GitHub (botão “Code”, opção “Download ZIP”) e descompactar, ou usar git clone com o endereço do repositório.
-4. **Executar.** Entrar na pasta sistema e digitar python main.py. No Windows também é possível dar dois cliques no arquivo main.py.
-5. **Primeiro acesso.** Na primeira execução o sistema cria o banco oficinafacil.db, com um usuário de cada perfil (Quadro 5) e alguns itens de catálogo. O gerente deve trocar as senhas na aba Usuários logo no primeiro acesso.
-6. **Backup.** A cada dia em que o sistema é aberto, uma cópia do banco é gravada na pasta backups, com o nome oficinafacil_AAAA-MM-DD.db; as 30 mais recentes são mantidas (RNF05). Para restaurar, fechar o sistema e copiar o backup desejado por cima de oficinafacil.db. Recomenda-se copiar a pasta backups para um HD externo ou para a nuvem (Figura 24*).
+1. **Instalar o Python, em todos os computadores.** Baixar o instalador em https://www.python.org/downloads/ e executá-lo. No Windows, marcar a opção “Add python.exe to PATH” antes de clicar em “Install Now”.
+2. **Obter o sistema, em todos os computadores.** Baixar o repositório do GitHub (botão “Code”, opção “Download ZIP”) e descompactar, ou usar git clone com o endereço do repositório.
+3. **Ligar o servidor central.** No computador escolhido, entrar na pasta sistema e digitar python servidor.py. A janela mostra o endereço que as estações vão usar, por exemplo 192.168.0.10:8765, e deve ficar aberta. Na primeira vez, o Windows pergunta se o Python pode usar a rede: permitir só em redes privadas. Convém reservar esse endereço no roteador, para ele não mudar.
+4. **Preparar cada estação.** Na pasta sistema, digitar python -m pip install -r requirements.txt (uma vez só, para instalar a PySide6). Para abrir o sistema, digitar python main.py ou dar dois cliques em main.py.
+5. **Primeiro acesso.** Na tela de login da estação, informar o endereço do servidor, que fica salvo. Na primeira execução, o servidor cria o banco oficinafacil.db, com um usuário de cada perfil (Quadro 5) e alguns itens de catálogo. O gerente deve trocar as senhas na página Usuários logo no primeiro acesso.
+6. **Backup.** A cada dia em que o servidor é ligado, uma cópia do banco é gravada na pasta backups do servidor, com o nome oficinafacil_AAAA-MM-DD.db; as 30 mais recentes são mantidas (RNF05). Para restaurar, fechar o sistema e copiar o backup desejado por cima de oficinafacil.db. Recomenda-se copiar a pasta backups para um HD externo ou para a nuvem (Figura 24*).
 7. **Testes (opcional).** Na pasta sistema, digitar python -m unittest discover -s tests -v.
 
 **Quadro 5 - Usuários criados na primeira execução.**
@@ -83,32 +86,34 @@ O código é orientado a objetos e segue as camadas do diagrama de componentes (
 
 ### d. Manual de Usuário (para um usuário leigo, os passos básicos de como se deve usar o sistema de informação desenvolvido).
 
-**Entrar e sair.** Abra o sistema, digite o login e a senha e clique em Entrar (Figura 1). Cada funcionário vê apenas as abas do seu perfil (Quadro 6). Para trocar de usuário, clique em Sair, no canto superior direito.
+**Entrar e sair.** Abra o sistema na estação, confira o endereço do servidor (só na primeira vez), digite o login e a senha e clique em Entrar (Figura 1). Se aparecer “Sem conexão com o servidor”, confira se o servidor está ligado e se a estação está na rede da oficina. Cada funcionário vê no menu lateral apenas as páginas do seu perfil (Quadro 6). Para trocar de usuário, clique em Sair, no fim do menu. O interruptor Tema escuro, logo acima, troca entre os temas claro e escuro, e a escolha fica salva.
 
 
-**Quadro 6 - Abas disponíveis para cada perfil.**
+**Quadro 6 - Páginas do menu para cada perfil.**
 
-| Aba | Atendente | Mecânico | Gerente |
+| Página | Atendente | Mecânico | Gerente |
 |---|---|---|---|
 | Painel | Sim | Sim | Sim |
 | Ordens de serviço | Sim | Sim | Sim |
 | Clientes e veículos | Sim | Não | Sim |
-| Compras, Catálogo, Usuários e Relatórios | Não | Não | Sim |
+| Peças e serviços (pesquisa e pedido de compra) | Sim | Sim | Não (usa o Catálogo) |
+| Compras (o gerente também compra e recebe) | Sim | Sim | Sim |
+| Catálogo, Usuários e Relatórios | Não | Não | Sim |
 
-**Painel.** Mostra quantas OS há em cada etapa e a lista “Minhas pendências”, que é o aviso do sistema para cada perfil: o mecânico vê as OS novas e as que estão sob sua responsabilidade; o gerente vê os orçamentos a aprovar e as OS que esperam peças; o atendente vê os orçamentos aprovados e os serviços concluídos. Dê dois cliques numa linha para abrir a OS.
+**Painel.** Para o atendente e o gerente, mostra quantas OS há em cada etapa (RF35); para todos, mostra a lista “Minhas pendências”, que é o aviso do sistema para cada perfil: o mecânico vê as OS novas e as que estão sob sua responsabilidade; o gerente vê os orçamentos a aprovar e as OS que esperam peças; o atendente vê os orçamentos aprovados e os serviços concluídos. Dê dois cliques numa linha para abrir a OS. Como outras estações mudam as OS ao mesmo tempo, o painel se atualiza sozinho a cada 30 segundos.
 
-**Janela da OS.** Todas as ações sobre uma OS são feitas pelos botões no alto da janela, e só aparecem os botões que podem ser usados naquele momento, conforme o perfil e a etapa da OS. O passo a passo de um atendimento completo é o seguinte:
+**Janela da OS.** Todas as ações sobre uma OS ficam na barra de ações da janela, e só aparecem os botões que podem ser usados naquele momento, conforme o perfil e a etapa da OS. O passo a passo de um atendimento completo é o seguinte:
 
-1. **Atendente ou gerente: cadastrar o cliente e o veículo** (na primeira visita). Na aba Clientes e veículos, clique em Novo, preencha nome e telefone (o CPF é opcional) e clique em Salvar. Com o cliente selecionado, preencha placa, marca e modelo do lado direito e clique em Salvar.
-2. **Atendente ou gerente: abrir a OS.** Na aba Ordens de serviço, clique em Nova OS, escolha o cliente e o veículo, confira a quilometragem, escreva o problema relatado e clique em OK. O mecânico é avisado no painel.
+1. **Atendente ou gerente: cadastrar o cliente e o veículo** (na primeira visita). Na página Clientes e veículos, clique em Novo, preencha nome e telefone (o CPF é opcional) e clique em Salvar. Com o cliente selecionado, preencha placa, marca e modelo do lado direito e clique em Salvar.
+2. **Atendente ou gerente: abrir a OS.** Na página Ordens de serviço, clique em Nova OS, escolha o cliente e o veículo, confira a quilometragem, escreva o problema relatado e clique em Abrir OS. O mecânico é avisado no painel.
 3. **Atendente ou mecânico: classificar.** Na OS, use Classificar atendimento. Serviço simples (por exemplo, troca de óleo) vai direto para execução, sem orçamento; avaliação completa segue para o diagnóstico.
-4. **Mecânico: registrar o diagnóstico.** Use Registrar diagnóstico, descreva o problema, escolha os serviços e as peças necessárias com a quantidade, clicando em Adicionar, e clique em OK. O orçamento é calculado automaticamente e enviado ao gerente.
+4. **Mecânico: registrar o diagnóstico.** Use Registrar diagnóstico, descreva o problema, escolha os serviços e as peças necessárias com a quantidade, clicando em Adicionar, e clique em Confirmar. O orçamento fica em preparação: revise os itens com Adicionar itens e Remover item e, quando estiver pronto, clique em Enviar orçamento ao gerente. Só então o orçamento é calculado e o gerente é avisado no painel.
 5. **Gerente: aprovar o orçamento.** Confira os itens. Para mudar um preço, selecione o item e use Alterar valor de item, que cria uma nova versão do orçamento. Depois clique em Aprovar orçamento.
 6. **Atendente: apresentar ao cliente.** Exportar orçamento (PDF) gera o arquivo para imprimir ou enviar. Em seguida, use Registrar decisão do cliente. Se o cliente aprovou e há peças, o serviço é liberado ao mecânico; se falta peça, o sistema cria a solicitação de compra. Se o cliente rejeitou, informe o motivo e a OS é cancelada.
-7. **Gerente: comprar peças** (só quando falta peça). Na aba Compras, selecione a solicitação, clique em Registrar compra e escolha o fornecedor. Quando as peças chegarem, clique em Registrar recebimento: o estoque é atualizado e a OS volta para execução.
+7. **Gerente: comprar peças** (só quando falta peça). Na página Compras, selecione a solicitação, clique em Registrar compra e escolha o fornecedor. Quando as peças chegarem, clique em Registrar recebimento: o estoque é atualizado e a OS volta para execução. A mesma página mostra os pedidos feitos para repor o estoque.
 8. **Mecânico: executar e concluir.** Terminado o trabalho, use Registrar execução para confirmar os serviços e as peças usados; nesse momento o estoque é baixado. Em serviço simples, informe ali os serviços e as peças; com orçamento aprovado, não é possível acrescentar itens, porque eles exigiriam nova aprovação. Para as peças trocadas, selecione a peça e use Destinação de resíduo. Por fim, clique em Concluir serviço: o atendente é avisado no painel.
 9. **Atendente: avisar, receber e entregar.** Avisar cliente mostra um texto pronto, já copiado para colar no WhatsApp; depois de enviar, confirme o aviso, que fica registrado na OS. Quando o cliente pagar, use Registrar pagamento (valor e forma). Por fim, clique em Entregar veículo e encerrar. O sistema não permite a entrega sem o pagamento do valor total.
-**Outras funções.** Na aba Ordens de serviço é possível filtrar as OS por status, cliente, placa e período. Na aba Clientes e veículos, os botões Histórico do cliente e Histórico do veículo mostram as OS anteriores. Na janela da OS, a aba Histórico de status mostra quem mudou cada etapa e quando. O gerente mantém o catálogo, os usuários e consulta os relatórios; as peças abaixo do estoque mínimo aparecem em vermelho no seu painel. O Quadro 7 explica as mensagens mais comuns.
+**Outras funções.** Na página Ordens de serviço é possível filtrar as OS por status, cliente, placa e período. Em qualquer lista, um clique no título da coluna ordena as linhas e o botão direito do mouse mostra as ações da linha. Na página Clientes e veículos, os botões Histórico e Histórico do veículo mostram as OS anteriores; na janela da OS, o botão Histórico do veículo faz o mesmo para qualquer perfil, inclusive o mecânico. Na página Peças e serviços, o atendente e o mecânico pesquisam serviços e peças pela descrição (sem precisar de acentos) ou pelo código, com o valor e o estoque (Figura 12); o interruptor Só peças em falta mostra só as que estão sem estoque ou abaixo do mínimo. Qualquer funcionário pode pedir a compra de uma peça, para uma OS ou para repor o estoque: em Solicitar compra (ou com um duplo clique na peça) ou em Nova solicitação, na página Compras (Figura 17). O pedido mostra o estoque e o mínimo da peça e já sugere a quantidade; enquanto ele está pendente, quem pediu pode alterar a quantidade ou cancelar. Na página Compras (Figura 10), os indicadores mostram quantas solicitações há em cada situação (um clique filtra a lista), e os filtros separam por situação, destino (OS ou estoque), fornecedor, peça, número da OS, período e “Só as minhas”; abaixo da lista aparecem os detalhes da solicitação selecionada. Na janela da OS, a aba Histórico de status mostra quem mudou cada etapa e quando. O gerente mantém o catálogo, os usuários e consulta os relatórios; as peças abaixo do estoque mínimo aparecem em vermelho no seu painel. O Quadro 7 explica as mensagens mais comuns.
 
 
 **Quadro 7 - Mensagens mais comuns do sistema.**
@@ -140,6 +145,8 @@ O desenvolvimento foi iterativo e incremental, como previsto nas premissas (item
 | M5 | Peças e compras, execução e conclusão | RF21 a RF28 | Semana 3 | Concluído |
 | M6 | Aviso ao cliente, pagamento, entrega, histórico, relatórios e painel | RF29 a RF35 | Semana 3 | Concluído |
 | M7 | Testes automatizados, backup, manuais e publicação no GitHub | RNF02 a RNF10; item 10 | Semana 4 | Concluído |
+| M8 | Servidor central e estações na rede local: comunicação HTTP/JSON, sessões e só endereços privados | RNF03, RNF15; CT-I05 a CT-I07, CT-N06 a CT-N09 | Semana 5 | Concluído |
+| M9 | Compras sem OS: pedido pelo atendente e pelo mecânico, para repor o estoque, e filtros das solicitações | RF22, RF23; CT-U26 a CT-U30, CT-I08 | Semana 5 | Concluído |
 
 
 **Quadro 9 - Rastreabilidade entre requisitos funcionais e métodos dos controladores.**
@@ -147,21 +154,21 @@ O desenvolvimento foi iterativo e incremental, como previsto nas premissas (item
 | Requisitos | Controlador | Métodos |
 |---|---|---|
 | RF01, RF02 | AuthController | autenticar, salvar_usuario, alternar_ativo |
-| RF03 a RF07 | CadastroController | salvar_cliente, salvar_veiculo, salvar_servico, salvar_peca, salvar_fornecedor e as consultas get_... |
-| RF08 a RF13 | OSController | abrir_os, pendencias (RF10), classificar, registrar_diagnostico, get_historico_status (RF12, com a função mudar_status), get_lista |
-| RF14 a RF20 | OrcamentoController | gerar_orcamento, alterar_valor_item, aprovar, exportar_pdf, registrar_decisao_cliente (com OSController.autorizar_execucao no RF19) |
-| RF21 a RF25 | PecasComprasController | verificar_pecas, solicitar_faltantes, solicitar_compra, registrar_compra, registrar_recebimento, cancelar_solicitacao, registrar_destinacao (a baixa do RF24 é feita por ServicoEstoque) |
+| RF03 a RF07 | CadastroController | salvar_cliente, salvar_veiculo, salvar_servico, salvar_peca, salvar_fornecedor e as consultas get_... (com pesquisa por descrição ou código) |
+| RF08 a RF13 | OSController | abrir_os, pendencias (RF10), classificar, registrar_diagnostico, adicionar_itens, remover_item, get_historico_status (RF12, com a função mudar_status), get_lista |
+| RF14 a RF20 | OrcamentoController | gerar_orcamento (chamado por OSController.enviar_orcamento), alterar_valor_item, aprovar, exportar_pdf, registrar_decisao_cliente (com OSController.autorizar_execucao no RF19) |
+| RF21 a RF25 | PecasComprasController | verificar_pecas, solicitar_faltantes, solicitar_compra (com ou sem OS), alterar_solicitacao, get_solicitacoes (filtros), resumo_solicitacoes, registrar_compra, registrar_recebimento, cancelar_solicitacao, registrar_destinacao (a baixa do RF24 é feita por ServicoEstoque) |
 | RF26 a RF29 | OSController | registrar_execucao, concluir_servico, pendencias (RF28), gerar_mensagem, registrar_aviso_cliente |
 | RF30 a RF32 | PagamentoController | registrar_pagamento, entregar_veiculo |
 | RF33 a RF35 | RelatorioController | historico_manutencao, gerar, exportar_pdf, painel |
 
 ### a. Interfaces com o usuário.
 
-As figuras a seguir mostram as principais telas do sistema, capturadas com uma base de demonstração que tem quatro OS em etapas diferentes. A interface usa rótulos em todos os campos, fonte ampliada e navegação por teclado (RNF01, RNF13).
+As figuras a seguir mostram as principais telas do sistema, capturadas com uma base de demonstração que tem quatro OS em etapas diferentes. Os campos de data têm calendário (botão ▼) e atalhos de período. A interface usa rótulos em todos os campos, fonte ampliada e navegação por teclado (RNF01, RNF13).
 
-**Figura 1 - Tela de login (RF01).**
+**Figura 1 - Tela de login da estação, com o endereço do servidor central (RF01).**
 
-![Tela de login (RF01)](telas/01_login.png)
+![Tela de login da estação, com o endereço do servidor central (RF01)](telas/01_login.png)
 
 **Figura 2 - Painel do gerente: OS por etapa, pendências e alerta de estoque mínimo (RF15, RF35).**
 
@@ -179,33 +186,53 @@ As figuras a seguir mostram as principais telas do sistema, capturadas com uma b
 
 ![Janela da OS aberta, com o botão de classificação do atendimento (RF09)](telas/11_os_aberta_mecanico.png)
 
-**Figura 6 - Janela da OS aguardando o gerente: alterar valor e aprovar o orçamento (RF16).**
+**Figura 6 - Janela da OS em diagnóstico: o mecânico revisa os itens e envia o orçamento ao gerente (RF11, RF14).**
+
+![Janela da OS em diagnóstico: o mecânico revisa os itens e envia o orçamento ao gerente (RF11, RF14)](telas/13_os_orcamento_preparacao.png)
+
+**Figura 7 - Janela da OS aguardando o gerente: alterar valor e aprovar o orçamento (RF16).**
 
 ![Janela da OS aguardando o gerente: alterar valor e aprovar o orçamento (RF16)](telas/09_os_aprovacao_gerente.png)
 
-**Figura 7 - Janela de uma OS encerrada, vista pelo atendente (RF30 a RF32).**
+**Figura 8 - Janela de uma OS encerrada, vista pelo atendente (RF30 a RF32).**
 
 ![Janela de uma OS encerrada, vista pelo atendente (RF30 a RF32)](telas/12_os_encerrada.png)
 
-**Figura 8 - Cadastro de clientes e veículos e acesso ao histórico (RF03, RF04, RF33).**
+**Figura 9 - Cadastro de clientes e veículos e acesso ao histórico (RF03, RF04, RF33).**
 
 ![Cadastro de clientes e veículos e acesso ao histórico (RF03, RF04, RF33)](telas/04_clientes_veiculos.png)
 
-**Figura 9 - Solicitações de compra de peças (RF22, RF23).**
+**Figura 10 - Solicitações de compra de peças (RF22, RF23).**
 
 ![Solicitações de compra de peças (RF22, RF23)](telas/05_compras.png)
 
-**Figura 10 - Catálogo de serviços, peças e fornecedores (RF05 a RF07).**
+**Figura 11 - Catálogo de serviços, peças e fornecedores (RF05 a RF07).**
 
 ![Catálogo de serviços, peças e fornecedores (RF05 a RF07)](telas/06_catalogo.png)
 
-**Figura 11 - Cadastro de usuários e perfis (RF02).**
+**Figura 12 - Pesquisa de peças e serviços, para o atendente e o mecânico (RF05, RF06).**
+
+![Pesquisa de peças e serviços, para o atendente e o mecânico (RF05, RF06)](telas/14_pecas_servicos.png)
+
+**Figura 13 - Cadastro de usuários e perfis (RF02).**
 
 ![Cadastro de usuários e perfis (RF02)](telas/07_usuarios.png)
 
-**Figura 12 - Relatório gerencial (RF34).**
+**Figura 14 - Relatório gerencial (RF34).**
 
 ![Relatório gerencial (RF34)](telas/08_relatorios.png)
+
+**Figura 15 - Painel do gerente no tema escuro (RF35).**
+
+![Painel do gerente no tema escuro (RF35)](telas/escuro/02_painel_gerente.png)
+
+**Figura 16 - Diálogo de abertura de OS, com os campos validados (RF08).**
+
+![Diálogo de abertura de OS, com os campos validados (RF08)](telas/15_dialogo_nova_os.png)
+
+**Figura 17 - Pedido de compra de peça, para uma OS ou para repor o estoque (RF22).**
+
+![Pedido de compra de peça, para uma OS ou para repor o estoque (RF22)](telas/16_dialogo_compra.png)
 
 ### b. Entregas no Github dos códigos.
 
@@ -219,7 +246,7 @@ O código é versionado com Git e publicado no GitHub (RNF08), no repositório p
 | README.md | Descrição do sistema, como executar e como testar. |
 | main.py | Ponto de entrada do sistema. |
 | oficinafacil/ | Código-fonte, nos pacotes apresentacao, controle, servico, persistencia e modelo. |
-| tests/ | Testes automatizados: apoio.py (pré-condições comuns), test_unitarios.py, test_integracao.py e test_nao_funcionais.py. |
+| tests/ | Testes automatizados: apoio.py (pré-condições comuns), test_unitarios.py, test_compras.py, test_integracao.py, test_rede.py e test_nao_funcionais.py. |
 | docs/ | Documentação dos itens 8 a 10 e capturas das telas. |
 | .gitignore | Exclui do repositório o banco local e os backups, que contêm dados de clientes (RNF04). |
 
@@ -228,8 +255,9 @@ O código é versionado com Git e publicado no GitHub (RNF08), no repositório p
 
 | Entrega | Conteúdo | Itens |
 |---|---|---|
-| Commit 829394b (07/11/2026) | Sistema completo: código-fonte, testes automatizados, README, documentação e capturas de tela. | 8, 9 e 10 |
-| Commits seguintes | Correções e ajustes apontados pelos testes e pela avaliação, um commit por alteração. | 10 |
+| Commit bc9af7e (07/11/2026) | Sistema completo: código-fonte, testes automatizados, README, documentação e capturas de tela. | 8, 9 e 10 |
+| Commit 978c2c7 (07/11/2026) | Documentação: endereço do repositório no item 9b. | 9 |
+| Commit 5770c85 (07/11/2026) | Envio do orçamento pelo mecânico, pesquisa de peças e serviços, campos de data com calendário, novo layout do PDF e testes CT-U22 a CT-U25. | 9 e 10 |
 
 Para enviar uma alteração, na pasta sistema: git add .; git commit -m "descrição da alteração"; e git push. Para obter o código: git clone https://github.com/Gustavo-A-dos-Santos/oficinafacil.git.
 
@@ -245,21 +273,22 @@ Os testes verificam se o sistema cumpre os objetivos definidos na Primeira Parte
 
 ### b. Escolha do tipo de teste com base nos seminários (Justificativa da escolha dos tipos de testes a serem realizados (ex: testes unitários para verificar funções específicas, testes de integração para validar a interação entre módulos).
 
-Foram escolhidos quatro tipos de teste, apresentados no Quadro 12. Os três primeiros são automatizados e executados a cada alteração do código; o teste de sistema é manual, feito nas telas como o funcionário faria.
+Foram escolhidos cinco tipos de teste, apresentados no Quadro 12. Os quatro primeiros são automatizados e executados a cada alteração do código; o teste de sistema é manual, feito nas telas como o funcionário faria.
 
 
 **Quadro 12 - Tipos de teste escolhidos.**
 
 | Tipo | Objetivo no OficinaFácil | Forma |
 |---|---|---|
-| Unitário | Verificar cada regra isolada: hash de senha, placa única, cálculo do orçamento, versões, transições de status inválidas. | Automatizado (test_unitarios.py) |
+| Unitário | Verificar cada regra isolada: hash de senha, placa única, cálculo do orçamento, versões, transições de status inválidas, solicitações de compra com e sem OS. | Automatizado (test_unitarios.py e test_compras.py) |
 | Integração | Verificar controladores, serviços, DAOs e banco juntos, percorrendo o ciclo completo da OS do diagrama de estados (Figura 13*). | Automatizado (test_integracao.py) |
-| Não funcional | Verificar segurança (SQL Injection), transações, rastreabilidade, backup e desempenho com 10.000 OS. | Automatizado (test_nao_funcionais.py) |
+| Integração cliente-servidor | Verificar estação e servidor juntos, pela rede: login remoto, duas estações na mesma OS, regra de negócio violada chegando à estação e PDF gerado no servidor. | Automatizado (test_rede.py) |
+| Não funcional | Verificar segurança (SQL Injection, sessão obrigatória, perfil conferido no servidor), só endereços privados, servidor fora do ar, transações, rastreabilidade, backup e desempenho com 10.000 OS. | Automatizado (test_nao_funcionais.py e test_rede.py) |
 | Sistema e aceitação (caixa-preta) | Usar as telas como o funcionário usaria, seguindo o manual de usuário. | Manual (roteiros CT-S) |
 
 #### Requisitos do projeto
 
-As regras de negócio RN01 a RN10 definem o fluxo da OS. Uma falha nelas, como entregar o veículo sem pagamento ou executar o serviço sem aprovação, quebra o processo TO-BE. Por isso cada regra é coberta por testes unitários e o fluxo inteiro, por testes de integração. Os requisitos não funcionais mensuráveis (RNF02, RNF03, RNF05, RNF06, RNF09 e RNF10) têm testes próprios.
+As regras de negócio RN01 a RN10 definem o fluxo da OS. Uma falha nelas, como entregar o veículo sem pagamento ou executar o serviço sem aprovação, quebra o processo TO-BE. Por isso cada regra é coberta por testes unitários e o fluxo inteiro, por testes de integração. Os requisitos não funcionais mensuráveis (RNF02, RNF03, RNF05, RNF06, RNF09, RNF10 e RNF15) têm testes próprios. Como várias estações usam o mesmo servidor, a comunicação também é testada de ponta a ponta.
 
 #### Risco associado e impacto no usuário final
 
@@ -274,6 +303,8 @@ As regras de negócio RN01 a RN10 definem o fluxo da OS. Uma falha nelas, como e
 | Estoque inconsistente | Falta de peça e atraso no serviço. | CT-U14, CT-I01, CT-I02 |
 | Vazamento ou perda de dados | Descumprimento da LGPD e perda do histórico. | CT-U01, CT-N02, CT-N04 |
 | Lentidão com muitas OS | Atendimento demorado no balcão. | CT-N05 |
+| Servidor desligado ou estação fora da rede | Balcão parado até a rede voltar. | CT-N09 |
+| Acesso de fora da oficina ou com perfil forjado | Dados de clientes expostos (LGPD). | CT-N06, CT-N07, CT-N08 |
 
 #### Recursos disponíveis (tempo e equipe)
 
@@ -286,10 +317,10 @@ O projeto tem um desenvolvedor e poucas semanas para os testes. Por isso foi esc
 
 | Categoria | Ferramenta | Função e forma de uso |
 |---|---|---|
-| Teste automatizado | unittest (biblioteca padrão do Python, equivalente ao JUnit) | Executa os testes unitários, de integração e não funcionais. Cada teste usa um banco novo em memória, então os testes são independentes e não alteram o banco real. |
+| Teste automatizado | unittest (biblioteca padrão do Python, equivalente ao JUnit) | Executa os testes unitários, de integração e não funcionais. Cada teste usa um banco novo em memória, então os testes são independentes e não alteram o banco real; os testes de rede sobem um servidor de verdade em 127.0.0.1, numa porta livre. |
 | Teste de interface | Roteiros manuais (CT-S) | Executados nas telas do sistema, seguindo o manual de usuário. |
 | Gestão de testes | GitHub Issues e GitHub Projects (no lugar de TestRail ou JIRA) | Cada defeito vira uma issue com o código do caso de teste; o quadro do Project acompanha as colunas A fazer, Em correção, Retestar e Fechado. |
-| Desempenho | time.perf_counter, dentro do unittest (no lugar do JMeter) | O caso CT-N05 insere 10.000 OS e mede o tempo das consultas principais. Como o sistema é desktop, sem servidor HTTP, o JMeter não se aplica. |
+| Desempenho | time.perf_counter, dentro do unittest (no lugar do JMeter) | O caso CT-N05 insere 10.000 OS e mede o tempo das consultas principais. O servidor fala HTTP, mas atende só a rede da oficina, com poucas estações, então a carga do JMeter não se justifica. |
 | Versionamento | Git e GitHub | Os scripts ficam na pasta tests, junto com o código, e mudam no mesmo commit da funcionalidade testada. |
 
 ### d. Script detalhado e escrita do tipo de teste que será realizado (Como os scripts serão documentados e versionados).
@@ -304,7 +335,7 @@ Cada teste automatizado é um método chamado test_CT_<tipo><número>_<descriç�
 | Parte | Onde fica no script automatizado |
 |---|---|
 | Cabeçalho | Nome do método (código do caso de teste) e docstring com objetivo e requisito. |
-| Pré-condições | Método setUp() da classe BaseTeste (tests/apoio.py): banco novo em memória, com os três usuários e o catálogo inicial, e os sete controladores. |
+| Pré-condições | Método setUp() da classe BaseTeste (tests/apoio.py): banco novo em memória, com os três usuários e o catálogo inicial, e os sete controladores; nos testes de rede, a classe BaseRede (tests/test_rede.py) também sobe o servidor central e cria as estações. |
 | Passos | Chamadas aos métodos dos controladores, na ordem do caso de uso. |
 | Resultados esperados | Verificações assertEqual, assertIn, assertRaises etc. |
 
@@ -355,6 +386,7 @@ def test_CT_I03_rejeicao_cancela_a_os(self):
     os_id = c.os.abrir_os(self.atendente, 1, 1, "Freio rangendo", 150000)
     c.os.classificar(self.atendente, os_id, False, self.mecanico.id)
     c.os.registrar_diagnostico(self.mecanico, os_id, "Pastilhas gastas", [(3, 1)], [(4, 1)])
+    c.os.enviar_orcamento(self.mecanico, os_id)
     c.orcamento.aprovar(self.gerente, os_id)
     c.orcamento.registrar_decisao_cliente(self.atendente, os_id, False, "Achou caro")
     os_ = c.os.get_os(os_id)
@@ -385,7 +417,30 @@ def test_CT_N02_sql_injection(self):
 ```
 
 
-**Quadro 19 - Caso de teste de sistema CT-S03 (roteiro manual).**
+**Quadro 19 - Caso de teste de integração cliente-servidor CT-I05.**
+
+| Campo | Conteúdo |
+|---|---|
+| Caso | CT-I05: a OS aberta numa estação aparece em outra |
+| Requisitos | RF01, RF08, RF10, RNF15 |
+| Pré-condição | Servidor central no ar com banco novo; duas estações autenticadas (atendente e mecânico). |
+| Passos | A estação do balcão abre a OS; a estação da oficina consulta as pendências do mecânico. |
+| Resultado esperado | A OS aparece nas pendências da outra estação, com o status Aberta. |
+
+Script correspondente (arquivo tests/test_rede.py):
+
+```python
+def test_CT_I05_duas_estacoes_na_mesma_os(self):
+    """RF01, RF08, RF10: a OS aberta numa estação aparece nas pendências do mecânico em outra estação."""
+    balcao, atendente = self.estacao("atendente")
+    oficina, mecanico = self.estacao("mecanico")
+    os_id = balcao.os.abrir_os(atendente, 1, 1, "Barulho no motor", 150000)
+    self.assertIn(os_id, [o.id for o in oficina.os.pendencias(mecanico)])
+    self.assertEqual(oficina.os.get_os(os_id).status, S.ABERTA)
+```
+
+
+**Quadro 20 - Caso de teste de sistema CT-S03 (roteiro manual).**
 
 | Campo | Conteúdo |
 |---|---|
@@ -398,12 +453,14 @@ def test_CT_N02_sql_injection(self):
 ### e. Planejamento de todos os casos de teste que serão realizados no sistema (Cronograma para a execução dos testes e marcos importantes do ciclo de vida do sistema).
 
 
-**Quadro 20 - Cronograma dos testes e marcos do ciclo de vida.**
+**Quadro 21 - Cronograma dos testes e marcos do ciclo de vida.**
 
 | Fase do ciclo de vida | Testes | Quando |
 |---|---|---|
 | Construção (marcos M1 a M6) | Unitários de cada módulo, escritos junto com a função. | A cada funcionalidade concluída |
 | Integração (fim do M6) | CT-I01 a CT-I04 | Ao fechar o fluxo completo da OS |
+| Cliente-servidor (M8) | CT-I05 a CT-I07 e CT-N06 a CT-N09 | Ao ligar as estações ao servidor central |
+| Compras sem OS (M9) | CT-U26 a CT-U30, CT-I08 e CT-S10 | Ao liberar o pedido de compra para todos os perfis |
 | Verificação dos RNF (M7) | CT-N01 a CT-N05 | Antes da publicação no GitHub |
 | Validação e aceitação (M7) | CT-S01 a CT-S08, com os três perfis | Antes da entrega da Terceira Parte |
 | Manutenção | Bateria automática completa (regressão) | Antes de cada novo commit |
@@ -412,10 +469,10 @@ def test_CT_N02_sql_injection(self):
 
 #### Definição de critérios de sucesso para cada caso de teste
 
-O Quadro 21 lista os 38 casos de teste, organizados por tipo e prioridade, com o critério de sucesso de cada um.
+O Quadro 22 lista os 57 casos de teste, organizados por tipo e prioridade, com o critério de sucesso de cada um.
 
 
-**Quadro 21 - Casos de teste por tipo e prioridade, com o critério de sucesso.**
+**Quadro 22 - Casos de teste por tipo e prioridade, com o critério de sucesso.**
 
 | Código | Tipo | Descrição | Requisitos | Prioridade | Critério de sucesso |
 |---|---|---|---|---|---|
@@ -440,16 +497,33 @@ O Quadro 21 lista os 38 casos de teste, organizados por tipo e prioridade, com o
 | CT-U17 | Unitário | CPF repetido mostra o cliente existente | RF03 | Média | Cadastro recusado, com o nome do cliente |
 | CT-U18 | Unitário | Serviço com valor base zero | RF05 | Média | Cadastro recusado |
 | CT-U21 | Unitário | Cancelar solicitação de compra | RF23 | Média | Solicitação na situação Cancelada |
+| CT-U22 | Unitário | Orçamento só vai ao gerente após o envio do mecânico | RF11, RF14 | Alta | OS em diagnóstico até o envio; depois Aguardando gerente com total de R$ 780,00 |
+| CT-U23 | Unitário | Remover item e recusar envio sem serviço | RF11, RF14 | Média | Envio recusado; OS em diagnóstico |
+| CT-U24 | Unitário | Pesquisa de peças e serviços sem acento e por código | RF05, RF06 | Média | Itens certos encontrados |
+| CT-U25 | Unitário | Período do relatório validado e impresso no PDF | RF34 | Média | Período inválido recusado; PDF com o período |
+| CT-U26 | Unitário | Compra para o estoque, sem OS, pedida pelo atendente e pelo mecânico | RF22, RF23 | Alta | Solicitação sem OS com quem pediu; estoque somado no recebimento |
+| CT-U27 | Unitário | Filtros das solicitações de compra | RF23 | Média | Cada filtro devolve só as solicitações certas; OS inválida recusada |
+| CT-U28 | Unitário | Quem pediu altera e cancela a solicitação pendente | RF22, RNF03 | Média | Outro perfil recusado; quantidade alterada e solicitação cancelada |
+| CT-U29 | Unitário | Pedido repetido e pedido para OS cancelada | RF22 | Média | Os dois pedidos recusados |
+| CT-U30 | Unitário | Banco antigo atualizado sem perder solicitações | RNF06 | Média | OS opcional e colunas novas; dados mantidos |
 | CT-I01 | Integração | Ciclo completo com falta de peça (marcos t0 a t9) | RF08 a RF32 | Alta | Sequência de status e dados finais corretos |
 | CT-I02 | Integração | Serviço simples sem orçamento e pagamento parcial | RF09, RF26, RF30 a RF32, RN01, RN07 | Alta | Sem orçamento; entrega só com o pagamento total |
 | CT-I03 | Integração | Rejeição cancela a OS | RF18, RF20, RN09 | Alta | Cancelada com motivo; estoque intacto |
 | CT-I04 | Integração | Consultas, histórico, painel e relatório | RF13, RF33 a RF35 | Média | Contagens e faturamento corretos |
+| CT-I05 | Integração | Duas estações na mesma OS, pelo servidor | RF01, RF08, RF10, RNF15 | Alta | OS aberta numa estação aparece na outra |
+| CT-I06 | Integração | Ciclo remoto completo; entrega sem pagamento volta como erro | RF09 a RF32, RN07 | Alta | Erro RN07 na estação; OS Encerrada depois do pagamento |
+| CT-I07 | Integração | PDF do orçamento gerado no servidor e salvo na estação | RF17 | Média | Arquivo PDF válido na estação |
+| CT-I08 | Integração | Compra sem OS pela rede: pedido numa estação, filtro e recebimento em outra | RF22, RF23, RNF15 | Alta | Solicitação encontrada pelo filtro; recebimento registrado |
 | CT-N01 | Não funcional | Transação desfeita em caso de erro | RNF06 | Alta | Nenhum registro parcial |
 | CT-N02 | Não funcional | SQL Injection | RNF03 | Alta | Ataque sem efeito |
 | CT-N03 | Não funcional | Rastreabilidade das mudanças de status | RNF09 | Média | Usuário, data e hora em cada mudança |
 | CT-N04 | Não funcional | Backup diário | RNF05 | Média | Arquivo criado e legível |
 | CT-N05 | Não funcional | Desempenho com 10.000 OS | RNF02, RNF10 | Média | Cada consulta em menos de 3 segundos |
-| CT-S01 | Sistema (manual) | Login de cada perfil mostra só as suas abas | RF01, RNF03 | Alta | Abas conforme o Quadro 6 |
+| CT-N06 | Não funcional | Chamada sem sessão é recusada | RNF03 | Alta | Login errado não abre sessão; chamada recusada |
+| CT-N07 | Não funcional | Só endereços privados da rede local | RNF15 | Alta | Endereço público recusado no servidor e na estação |
+| CT-N08 | Não funcional | Perfil conferido no servidor; hash da senha não sai dele | RNF03 | Alta | Perfil forjado recusado; usuário sem hash |
+| CT-N09 | Não funcional | Servidor fora do ar | RNF05 | Média | Aviso “Sem conexão com o servidor” |
+| CT-S01 | Sistema (manual) | Login de cada perfil mostra só as suas páginas | RF01, RNF03 | Alta | Páginas conforme o Quadro 6 |
 | CT-S02 | Sistema (manual) | Atendimento completo pela interface, do cadastro à entrega | RF03 a RF32 | Alta | OS Encerrada, sem erro de tela |
 | CT-S03 | Sistema (manual) | Entrega sem pagamento bloqueada | RF31, RN07 | Alta | Aviso exibido; status inalterado |
 | CT-S04 | Sistema (manual) | Exportar o orçamento e abrir o PDF | RF17 | Média | PDF abre com os itens e o total |
@@ -457,8 +531,10 @@ O Quadro 21 lista os 38 casos de teste, organizados por tipo e prioridade, com o
 | CT-S07 | Sistema (manual) | Abrir OS e registrar diagnóstico em até 3 telas | RNF01 | Média | No máximo 3 janelas |
 | CT-S05 | Sistema (manual) | Avisar cliente: mensagem copiada e aviso registrado | RF29 | Baixa | Texto colado corretamente; data do aviso na OS |
 | CT-S08 | Sistema (manual) | Navegação por teclado (Tab e Enter no login) | RNF13 | Baixa | Campos acessíveis sem mouse |
+| CT-S09 | Sistema (manual) | Duas estações abertas ao mesmo tempo na rede da oficina | RNF15 | Média | OS aberta numa estação aparece no painel da outra em até 30 segundos |
+| CT-S10 | Sistema (manual) | Atendente pede peça para o estoque em Peças e serviços; gerente compra e recebe | RF22, RF23 | Média | Pedido aparece em Compras; estoque atualizado no recebimento |
 
 **Critério geral de aceitação:** todos os casos de prioridade Alta aprovados e nenhum defeito de prioridade Alta em aberto. Defeitos dos casos de prioridade Média e Baixa ficam registrados como issue no GitHub.
 
-**Resultado da execução automática.** O comando python -m unittest discover -s tests -v executou os 30 testes automatizados (CT-U01 a CT-U21, CT-I01 a CT-I04 e CT-N01 a CT-N05), e todos foram aprovados, no Python 3.14.4 sob o Windows 11. Os roteiros manuais CT-S01 a CT-S08 são executados na validação, antes da entrega da Terceira Parte.
+**Resultado da execução automática.** O comando python -m unittest discover -s tests -v executou os 47 testes automatizados (CT-U01 a CT-U30, CT-I01 a CT-I08 e CT-N01 a CT-N09), e todos foram aprovados, no Python 3.14.4 sob o Windows 11. Os roteiros manuais CT-S01 a CT-S10 são executados na validação, antes da entrega da Terceira Parte.
 

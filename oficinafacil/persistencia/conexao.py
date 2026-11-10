@@ -99,11 +99,14 @@ CREATE TABLE IF NOT EXISTS item_peca_os (
 );
 CREATE TABLE IF NOT EXISTS solicitacao_compra (
     id INTEGER PRIMARY KEY,
-    os_id INTEGER NOT NULL REFERENCES ordem_servico(id),
+    os_id INTEGER REFERENCES ordem_servico(id),
     peca_id INTEGER NOT NULL REFERENCES peca(id),
     fornecedor_id INTEGER REFERENCES fornecedor(id),
     quantidade INTEGER NOT NULL CHECK (quantidade > 0),
-    situacao TEXT NOT NULL
+    situacao TEXT NOT NULL,
+    solicitante_id INTEGER REFERENCES usuario(id),
+    data_solicitacao TEXT,
+    observacao TEXT
 );
 CREATE TABLE IF NOT EXISTS pagamento (
     id INTEGER PRIMARY KEY,
@@ -127,16 +130,44 @@ class Conexao:
     def __init__(self, caminho="oficinafacil.db"):
         self.caminho = caminho
 
-    def conectar(self):
-        """Abre o banco, cria as tabelas e carrega os dados iniciais se estiver vazio."""
-        conn = sqlite3.connect(self.caminho)
+    def conectar(self, varias_linhas=False):
+        """Abre o banco, cria as tabelas e carrega os dados iniciais se estiver vazio.
+
+        varias_linhas=True é usado pelo servidor central, que atende cada estação numa linha de execução
+        (o acesso ao banco continua um por vez, controlado pelo servidor)."""
+        conn = sqlite3.connect(self.caminho, check_same_thread=not varias_linhas)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.create_function("sem_acento", 1, sem_acento, deterministic=True)  # usada nas pesquisas
         conn.executescript(ESQUEMA)
+        self.atualizar_esquema(conn)
         if conn.execute("SELECT COUNT(*) FROM usuario").fetchone()[0] == 0:
             self.carregar_dados_iniciais(conn)
         return conn
+
+    def atualizar_esquema(self, conn):
+        """Bancos criados antes da compra para reposição de estoque: a OS da solicitação passa a ser opcional e
+        entram o solicitante, a data e a observação. Os dados existentes são mantidos."""
+        cols = {c["name"]: c for c in conn.execute("PRAGMA table_info(solicitacao_compra)")}
+        if "solicitante_id" in cols and not cols["os_id"]["notnull"]:
+            return
+        ddl = ESQUEMA[ESQUEMA.index("CREATE TABLE IF NOT EXISTS solicitacao_compra"):]
+        ddl = ddl[:ddl.index(");") + 2].replace("IF NOT EXISTS solicitacao_compra", "solicitacao_compra_nova")
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            conn.execute("BEGIN")
+            conn.execute(ddl)
+            conn.execute("INSERT INTO solicitacao_compra_nova (id, os_id, peca_id, fornecedor_id, quantidade, situacao) "
+                         "SELECT id, os_id, peca_id, fornecedor_id, quantidade, situacao FROM solicitacao_compra")
+            conn.execute("DROP TABLE solicitacao_compra")
+            conn.execute("ALTER TABLE solicitacao_compra_nova RENAME TO solicitacao_compra")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.execute("PRAGMA foreign_keys = ON")
 
     def carregar_dados_iniciais(self, conn):
         """Um usuário de cada perfil e alguns itens de catálogo (do diagrama de objetos, item 7d)."""

@@ -1,6 +1,9 @@
 """Pacote modelo.atendimento: OrdemServico e suas partes, e as enumerações do atendimento."""
 
 
+FORMAS_PAGAMENTO = ["Dinheiro", "PIX", "Cartão de débito", "Cartão de crédito"]
+
+
 class StatusOS:
     ABERTA = "ABERTA"
     EM_DIAGNOSTICO = "EM_DIAGNOSTICO"
@@ -31,6 +34,8 @@ class SituacaoCompra:
     COMPRADA = "COMPRADA"
     RECEBIDA = "RECEBIDA"
     CANCELADA = "CANCELADA"
+    TODAS = [PENDENTE, COMPRADA, RECEBIDA, CANCELADA]
+    NOMES = {PENDENTE: "Pendente", COMPRADA: "Comprada", RECEBIDA: "Recebida", CANCELADA: "Cancelada"}
 
 
 class OrdemServico:
@@ -116,15 +121,23 @@ class Orcamento:
 
 class SolicitacaoCompra:
     def __init__(self, id=None, os_id=None, peca_id=None, fornecedor_id=None, quantidade=1,
-                 situacao=SituacaoCompra.PENDENTE):
+                 situacao=SituacaoCompra.PENDENTE, solicitante_id=None, data_solicitacao=None, observacao=""):
         self.id = id
-        self.os_id = os_id
+        self.os_id = os_id                  # vazio: compra para repor o estoque, sem OS
         self.peca_id = peca_id
         self.fornecedor_id = fornecedor_id  # vazio enquanto pendente
         self.quantidade = quantidade
         self.situacao = situacao
+        self.solicitante_id = solicitante_id  # vazio quando a solicitação nasce da falta de peça na OS (RF21)
+        self.data_solicitacao = data_solicitacao
+        self.observacao = observacao or ""
         self.peca_descricao = ""
         self.fornecedor_nome = ""
+        self.solicitante_nome = ""
+
+    @property
+    def origem(self):
+        return f"OS {self.os_id}" if self.os_id else "Estoque"
 
 
 class Pagamento:
